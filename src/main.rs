@@ -57,27 +57,54 @@ async fn main() -> Result<()> {
     }
 
     // Subdomain Fuzzing
-    if let Some(wordlist) = args.wordlist {
-        println!("\n--- Starting Subdomain Fuzzing ---");
-        let found_subdomains = fuzzer::fuzz_subdomains(&targets, &wordlist).await?;
-        if !found_subdomains.is_empty() {
-            println!("Found {} valid subdomains:", found_subdomains.len());
-            for d in &found_subdomains {
-                println!("{}", d);
-                // Add found subdomains to targets for scanning
-                // Note: We need to resolve them to IPs for Nmap or just pass the domain?
-                // Nmap handles domains, but we want to scan the specific IP that matched?
-                // For now, let's just add the domain string to the list of things to scan.
-                // However, our `targets` vector is `Vec<Target>`.
-                // We should probably add them as Target::Domain.
+    if let Some(wordlist) = &args.wordlist {
+        if args.dry_run {
+            // In dry-run mode, just show what fuzzing would do
+            let domain_targets: Vec<String> = targets
+                .iter()
+                .filter_map(|t| match t {
+                    target::Target::Domain(d) => Some(d.clone()),
+                    _ => None,
+                })
+                .collect();
+            
+            if !domain_targets.is_empty() {
+                println!("\n=== SUBDOMAIN FUZZING (DRY RUN) ===");
+                println!("Would fuzz the following domains using wordlist: {}", wordlist);
+                for domain in &domain_targets {
+                    println!("  - {}", domain);
+                }
+                println!("Example command (conceptual):");
+                println!("  for word in $(cat {}); do", wordlist);
+                for domain in &domain_targets {
+                    println!("    dig $word.{} +short", domain);
+                }
+                println!("  done");
+                println!("=== END SUBDOMAIN FUZZING ===\n");
             }
+        } else {
+            // Actually run fuzzing
+            println!("\n--- Starting Subdomain Fuzzing ---");
+            let found_subdomains = fuzzer::fuzz_subdomains(&targets, wordlist).await?;
+            if !found_subdomains.is_empty() {
+                println!("Found {} valid subdomains:", found_subdomains.len());
+                for d in &found_subdomains {
+                    println!("{}", d);
+                    // Add found subdomains to targets for scanning
+                    // Note: We need to resolve them to IPs for Nmap or just pass the domain?
+                    // Nmap handles domains, but we want to scan the specific IP that matched?
+                    // For now, let's just add the domain string to the list of things to scan.
+                    // However, our `targets` vector is `Vec<Target>`.
+                    // We should probably add them as Target::Domain.
+                }
+            }
+            
+            // TODO: Add found subdomains to a list for scanning
         }
-        
-        // TODO: Add found subdomains to a list for scanning
     } else {
         // Check if there are domains but no wordlist
         let has_domains = targets.iter().any(|t| matches!(t, target::Target::Domain(_)));
-        if has_domains {
+        if has_domains && !args.dry_run {
              println!("\n[WARN] Domain targets detected but no wordlist provided. Skipping subdomain fuzzing.");
         }
     }
