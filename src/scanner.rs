@@ -161,58 +161,55 @@ async fn run_nmap_scan(
     pb.set_style(ProgressStyle::default_spinner().template("{spinner:.green} {msg}")?);
     pb.enable_steady_tick(std::time::Duration::from_millis(100));
 
+    // Spawn a task to update elapsed time periodically
+    let pb_clone = pb.clone();
+    let name_clone = name.to_string();
     let start_time = std::time::Instant::now();
-    let mut last_update = std::time::Instant::now();
-    let update_interval = std::time::Duration::from_secs(10);
+    let progress_task = tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(10));
+        interval.tick().await; // Skip first immediate tick
+        loop {
+            interval.tick().await;
+            let elapsed = start_time.elapsed().as_secs();
+            pb_clone.set_message(format!("Running {} ({}s elapsed)...", name_clone, elapsed));
+        }
+    });
 
     pb.set_message(format!("Running {} (0s elapsed)...", name));
 
-    // Poll for completion or Ctrl+C with periodic updates
-    let mut child = Some(child);
-    loop {
-        tokio::select! {
-            output_result = async {
-                if let Some(c) = child.take() {
-                    c.wait_with_output().await
-                } else {
-                    // Child already consumed
-                    futures::future::pending().await
+    // Wait for child or Ctrl+C
+    let result = tokio::select! {
+        output_result = child.wait_with_output() => {
+            pb.finish_with_message(format!("{} finished.", name));
+            match output_result {
+                Ok(output) if output.status.success() => {
+                    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                    Ok(stdout)
                 }
-            } => {
-                pb.finish_with_message(format!("{} finished.", name));
-                match output_result {
-                    Ok(output) if output.status.success() => {
-                        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                        return Ok(stdout);
-                    }
-                    Ok(output) => {
-                        eprintln!("Nmap failed with status: {}", output.status);
-                        let stderr = String::from_utf8_lossy(&output.stderr);
-                        eprintln!("Stderr: {}", stderr);
-                        return Ok(String::new());
-                    }
-                    Err(e) => {
-                        eprintln!("Failed to wait for nmap: {}", e);
-                        return Ok(String::new());
-                    }
+                Ok(output) => {
+                    eprintln!("Nmap failed with status: {}", output.status);
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    eprintln!("Stderr: {}", stderr);
+                    Ok(String::new())
                 }
-            }
-            _ = signal::ctrl_c() => {
-                pb.finish_with_message(format!("{} skipped by user.", name));
-                // Child is dropped here, and kill_on_drop(true) ensures it's killed.
-                println!("\nSkipping {}...", name);
-                return Ok(String::new());
-            }
-            _ = tokio::time::sleep(std::time::Duration::from_millis(500)) => {
-                // Update progress message every 10 seconds
-                if last_update.elapsed() >= update_interval {
-                    let elapsed = start_time.elapsed().as_secs();
-                    pb.set_message(format!("Running {} ({}s elapsed)...", name, elapsed));
-                    last_update = std::time::Instant::now();
+                Err(e) => {
+                    eprintln!("Failed to wait for nmap: {}", e);
+                    Ok(String::new())
                 }
             }
         }
-    }
+        _ = signal::ctrl_c() => {
+            pb.finish_with_message(format!("{} skipped by user.", name));
+            // Child is dropped here, and kill_on_drop(true) ensures it's killed.
+            println!("\nSkipping {}...", name);
+            Ok(String::new())
+        }
+    };
+
+    // Stop the progress update task
+    progress_task.abort();
+
+    result
 }
 
 fn parse_alive_hosts(content: &str) -> Result<Vec<String>> {
