@@ -8,6 +8,10 @@ use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
 use crate::target::Target;
 use crate::utils;
 
+/// Performs subdomain fuzzing on Domain targets.
+///
+/// Uses a wordlist to generate potential subdomains and resolves them.
+/// Returns a list of discovered subdomains that resolve to IPs matching the initial targets.
 pub async fn fuzz_subdomains(
     targets: &[Target],
     wordlist_path: &str,

@@ -5,6 +5,15 @@ use tokio::signal;
 use indicatif::{ProgressBar, ProgressStyle};
 use crate::target::Target;
 
+/// Orchestrates the Nmap scanning process.
+///
+/// This function performs a sequence of scans:
+/// 1. Alive Host Discovery (Ping Scan)
+/// 2. TCP Port Scan (All Ports)
+/// 3. UDP Port Scan (Top 1000 Ports)
+/// 4. Service & Script Scan (on discovered ports)
+///
+/// Only the final scan saves output to files.
 pub async fn run_scans(targets: &[Target], output_dir: &str) -> Result<()> {
     // Convert targets to string list for Nmap
     let target_strings: Vec<String> = targets.iter().map(|t| match t {

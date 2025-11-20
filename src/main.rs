@@ -1,10 +1,9 @@
-mod target;
-mod fuzzer;
-mod scanner;
-mod utils;
-
 use clap::Parser;
 use anyhow::Result;
+use nmap_helper::target::{self, Target};
+use nmap_helper::scanner;
+use nmap_helper::fuzzer;
+use nmap_helper::utils;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
