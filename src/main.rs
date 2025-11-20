@@ -117,61 +117,70 @@ async fn main() -> Result<()> {
 
     println!("\nFinal scan targets: {} IPs/CIDRs", scan_targets.len());
 
-    // Subdomain Fuzzing
-    if let Some(wordlist) = &args.wordlist {
-        if args.dry_run {
-            // In dry-run mode, just show what fuzzing would do
-            let domain_targets: Vec<String> = targets
-                .iter()
-                .filter_map(|t| match t {
-                    target::Target::Domain(d) => Some(d.clone()),
-                    _ => None,
-                })
-                .collect();
-            
-            if !domain_targets.is_empty() {
-                println!("\n=== SUBDOMAIN FUZZING (DRY RUN) ===");
-                println!("Would fuzz the following domains using wordlist: {}", wordlist);
-                for domain in &domain_targets {
-                    println!("  - {}", domain);
-                }
-                println!("Example command (conceptual):");
-                println!("  for word in $(cat {}); do", wordlist);
-                for domain in &domain_targets {
-                    println!("    dig $word.{} +short", domain);
-                }
-                println!("  done");
-                println!("=== END SUBDOMAIN FUZZING ===\n");
-            }
-        } else {
-            // Actually run fuzzing
-            println!("\n--- Starting Subdomain Fuzzing ---");
-            let found_subdomains = fuzzer::fuzz_subdomains(&targets, wordlist, &args.output_dir).await?;
-            if !found_subdomains.is_empty() {
-                println!("Found {} valid subdomains:", found_subdomains.len());
-                for d in &found_subdomains {
-                    println!("{}", d);
-                    // Add found subdomains to targets for scanning
-                    // Note: We need to resolve them to IPs for Nmap or just pass the domain?
-                    // Nmap handles domains, but we want to scan the specific IP that matched?
-                    // For now, let's just add the domain string to the list of things to scan.
-                    // However, our `targets` vector is `Vec<Target>`.
-                    // We should probably add them as Target::Domain.
-                }
-            }
-            
-            // TODO: Add found subdomains to a list for scanning
-        }
-    } else {
-        // Check if there are domains but no wordlist
-        let has_domains = targets.iter().any(|t| matches!(t, target::Target::Domain(_)));
-        if has_domains && !args.dry_run {
-             println!("\n[WARN] Domain targets detected but no wordlist provided. Skipping subdomain fuzzing.");
+
+    // Always show a preview of what will be done
+    println!("\n{}", "=".repeat(60));
+    println!("PREVIEW: Commands that will be executed");
+    println!("{}", "=".repeat(60));
+    
+    // Show fuzzing preview if applicable
+    if args.wordlist.is_some() {
+        let domain_targets: Vec<String> = targets
+            .iter()
+            .filter_map(|t| match t {
+                target::Target::Domain(d) => Some(d.clone()),
+                _ => None,
+            })
+            .collect();
+        
+        if !domain_targets.is_empty() {
+            println!("\n# Subdomain Fuzzing");
+            println!("Wordlist: {}", args.wordlist.as_ref().unwrap());
+            println!("Domains to fuzz: {:?}", domain_targets);
         }
     }
-
-    // Pass scan targets (filtered IPs only) to scanner
-    scanner::run_scans(&scan_targets, &args.output_dir, args.dry_run).await?;
+    
+    // Show scan preview by calling run_scans in dry-run mode
+    scanner::run_scans(&scan_targets, &args.output_dir, true).await?;
+    
+    // If --dry-run flag is set, exit here
+    if args.dry_run {
+        return Ok(());
+    }
+    
+    // Ask user for confirmation
+    println!("\n{}", "=".repeat(60));
+    print!("Do you want to proceed with execution? [y/N]: ");
+    use std::io::{self, Write};
+    io::stdout().flush()?;
+    
+    let mut response = String::new();
+    io::stdin().read_line(&mut response)?;
+    let response = response.trim().to_lowercase();
+    
+    if response != "y" && response != "yes" {
+        println!("Execution aborted by user.");
+        return Ok(());
+    }
+    
+    println!("\n{}", "=".repeat(60));
+    println!("EXECUTION STARTED");
+    println!("{}", "=".repeat(60));
+    
+    // Run actual fuzzing if wordlist provided
+    if let Some(wordlist) = &args.wordlist {
+        println!("\n--- Starting Subdomain Fuzzing ---");
+        let found_subdomains = fuzzer::fuzz_subdomains(&targets, wordlist, &args.output_dir).await?;
+        if !found_subdomains.is_empty() {
+            println!("Found {} valid subdomains:", found_subdomains.len());
+            for d in &found_subdomains {
+                println!("{}", d);
+            }
+        }
+    }
+    
+    // Pass scan targets (filtered IPs only) to scanner for actual execution
+    scanner::run_scans(&scan_targets, &args.output_dir, false).await?;
     
     Ok(())
 }
