@@ -71,26 +71,57 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
     let alive_output = run_nmap_scan("Alive Scan", &["-sn", "-oG", "-"], &target_strings, output_dir, None).await?;
     let alive_hosts = parse_alive_hosts(&alive_output)?;
     
-    if alive_hosts.is_empty() {
-        println!("No alive hosts found. Exiting.");
-        return Ok(());
+    let mut scan_targets = alive_hosts;
+    let mut use_pn = false;
+    
+    if scan_targets.is_empty() {
+        println!("No alive hosts found.");
+        
+        // Ask user if they want to continue with -Pn (skip host discovery)
+        use std::io::{self, Write};
+        print!("No hosts responded to ping. Continue scanning with -Pn (treat all hosts as online)? [y/N]: ");
+        io::stdout().flush()?;
+        
+        let mut response = String::new();
+        io::stdin().read_line(&mut response)?;
+        let response = response.trim().to_lowercase();
+        
+        if response == "y" || response == "yes" {
+            println!("Continuing with -Pn flag...");
+            scan_targets = target_strings.clone();
+            use_pn = true;
+        } else {
+            println!("Exiting.");
+            return Ok(());
+        }
+    } else {
+        println!("Alive hosts: {:?}", scan_targets);
     }
-    println!("Alive hosts: {:?}", alive_hosts);
 
     // 2. TCP Port Scan (All ports)
     if verbose {
-        eprintln!("[VERBOSE] Starting TCP port scan on {} alive hosts", alive_hosts.len());
+        eprintln!("[VERBOSE] Starting TCP port scan on {} hosts", scan_targets.len());
     }
     println!("\n--- Starting TCP Port Scan (All Ports) ---");
     // Use -oG - for parsing
-    let tcp_output = run_nmap_scan("TCP Scan", &["-p-", "-oG", "-"], &alive_hosts, output_dir, None).await?;
+    let tcp_args = if use_pn {
+        vec!["-Pn", "-p-", "-oG", "-"]
+    } else {
+        vec!["-p-", "-oG", "-"]
+    };
+    let tcp_output = run_nmap_scan("TCP Scan", &tcp_args, &scan_targets, output_dir, None).await?;
 
     // 3. UDP Port Scan (Top 1000)
     if verbose {
-        eprintln!("[VERBOSE] Starting UDP port scan on {} alive hosts", alive_hosts.len());
+        eprintln!("[VERBOSE] Starting UDP port scan on {} hosts", scan_targets.len());
     }
     println!("\n--- Starting UDP Port Scan (Top 1000) ---");
-    let udp_output = run_nmap_scan("UDP Scan", &["-sU", "--top-ports", "1000", "-oG", "-"], &alive_hosts, output_dir, None).await?;
+    let udp_args = if use_pn {
+        vec!["-Pn", "-sU", "--top-ports", "1000", "-oG", "-"]
+    } else {
+        vec!["-sU", "--top-ports", "1000", "-oG", "-"]
+    };
+    let udp_output = run_nmap_scan("UDP Scan", &udp_args, &scan_targets, output_dir, None).await?;
 
     // 4. Service & Script Scan (Default Scripts + Version)
     let tcp_ports = parse_ports_from_gnmap(&tcp_output)?;
@@ -117,6 +148,11 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
         // Construct the full command args manually for this one since we have dynamic ports
         let mut final_args = vec!["-sV", "-sC"];
         
+        // Add -Pn flag if we're in no-ping mode
+        if use_pn {
+            final_args.push("-Pn");
+        }
+        
         // If we have UDP ports, we must add -sU to the final scan to enable UDP scanning
         if !udp_ports.is_empty() {
             final_args.push("-sU");
@@ -133,7 +169,7 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
         
         // This is the ONLY scan that saves to file
         // Iterate over each host to save output with the IP as the filename
-        for host in alive_hosts {
+        for host in scan_targets {
             println!("Scanning host: {}", host);
             let single_target = vec![host.clone()];
             run_nmap_scan("Script Scan", &final_args, &single_target, output_dir, Some(&host)).await?;
