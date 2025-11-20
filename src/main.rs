@@ -85,7 +85,7 @@ async fn main() -> Result<()> {
         } else {
             // Actually run fuzzing
             println!("\n--- Starting Subdomain Fuzzing ---");
-            let found_subdomains = fuzzer::fuzz_subdomains(&targets, wordlist).await?;
+            let found_subdomains = fuzzer::fuzz_subdomains(&targets, wordlist, &args.output_dir).await?;
             if !found_subdomains.is_empty() {
                 println!("Found {} valid subdomains:", found_subdomains.len());
                 for d in &found_subdomains {
