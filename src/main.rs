@@ -49,12 +49,73 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
+
     let targets = target::parse_targets(all_targets_str)?;
 
     println!("Parsed {} targets:", targets.len());
     for t in &targets {
         println!("{:?}", t);
     }
+
+    // Extract explicit IP addresses and CIDR ranges (not domains)
+    let explicit_ips: Vec<target::Target> = targets
+        .iter()
+        .filter(|t| !matches!(t, target::Target::Domain(_)))
+        .cloned()
+        .collect();
+
+    // Resolve domain names and filter to only those resolving to explicit IPs
+    let mut scan_targets: Vec<target::Target> = explicit_ips.clone();
+    
+    for t in &targets {
+        if let target::Target::Domain(domain) = t {
+            // Resolve domain
+            use trust_dns_resolver::TokioAsyncResolver;
+            use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
+            
+            let resolver = TokioAsyncResolver::tokio(ResolverConfig::google(), ResolverOpts::default());
+            match resolver.lookup_ip(domain.as_str()).await {
+                Ok(response) => {
+                    let resolved_ips: Vec<std::net::IpAddr> = response.iter().collect();
+                    println!("Domain {} resolves to: {:?}", domain, resolved_ips);
+                    
+                    // Check if any resolved IP matches explicit targets
+                    for resolved_ip in resolved_ips {
+                        let mut matches_explicit = false;
+                        for explicit in &explicit_ips {
+                            match explicit {
+                                target::Target::IP(ip) => {
+                                    if &resolved_ip == ip {
+                                        matches_explicit = true;
+                                        break;
+                                    }
+                                }
+                                target::Target::Network(network) => {
+                                    if network.contains(resolved_ip) {
+                                        matches_explicit = true;
+                                        break;
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        
+                        if matches_explicit {
+                            println!("  -> {} is in explicit target list, will scan", resolved_ip);
+                            scan_targets.push(target::Target::IP(resolved_ip));
+                        } else {
+                            println!("  -> {} is NOT in explicit target list, skipping", resolved_ip);
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Failed to resolve domain {}: {}", domain, e);
+                }
+            }
+        }
+    }
+
+    println!("\nFinal scan targets: {} IPs/CIDRs", scan_targets.len());
 
     // Subdomain Fuzzing
     if let Some(wordlist) = &args.wordlist {
@@ -109,8 +170,8 @@ async fn main() -> Result<()> {
         }
     }
 
-    // Pass targets to scanner
-    scanner::run_scans(&targets, &args.output_dir, args.dry_run).await?;
+    // Pass scan targets (filtered IPs only) to scanner
+    scanner::run_scans(&scan_targets, &args.output_dir, args.dry_run).await?;
     
     Ok(())
 }
