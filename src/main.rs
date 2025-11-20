@@ -1,6 +1,6 @@
 use clap::Parser;
 use anyhow::Result;
-use nmap_helper::target::{self, Target};
+use nmap_helper::target;
 use nmap_helper::scanner;
 use nmap_helper::fuzzer;
 use nmap_helper::utils;
