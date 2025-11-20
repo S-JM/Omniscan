@@ -14,7 +14,7 @@ use crate::target::Target;
 /// 4. Service & Script Scan (on discovered ports)
 ///
 /// Only the final scan saves output to files.
-pub async fn run_scans(targets: &[Target], output_dir: &str) -> Result<()> {
+pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool) -> Result<()> {
     // Convert targets to string list for Nmap
     let target_strings: Vec<String> = targets.iter().map(|t| match t {
         Target::IP(ip) => ip.to_string(),
@@ -24,6 +24,35 @@ pub async fn run_scans(targets: &[Target], output_dir: &str) -> Result<()> {
 
     if target_strings.is_empty() {
         println!("No targets to scan.");
+        return Ok(());
+    }
+
+    // If dry-run mode, build and print all commands without executing
+    if dry_run {
+        println!("=== DRY RUN MODE: Commands that would be executed ===\n");
+        
+        // 1. Alive Host Discovery
+        let alive_cmd = build_command("nmap", &["-sn", "-oG", "-"], &target_strings, output_dir, None);
+        println!("# Alive Host Discovery (Ping Scan)");
+        println!("{}\n", alive_cmd);
+        
+        // 2. TCP Port Scan
+        let tcp_cmd = build_command("nmap", &["-p-", "-oG", "-"], &target_strings, output_dir, None);
+        println!("# TCP Port Scan (All Ports)");
+        println!("{}\n", tcp_cmd);
+        
+        // 3. UDP Port Scan
+        let udp_cmd = build_command("nmap", &["-sU", "--top-ports", "1000", "-oG", "-"], &target_strings, output_dir, None);
+        println!("# UDP Port Scan (Top 1000)");
+        println!("{}\n", udp_cmd);
+        
+        // 4. Service & Script Scan (example with placeholder ports)
+        println!("# Service & Script Scan (will run for each alive host with discovered ports)");
+        println!("# Example for a single host with mixed TCP and UDP ports:");
+        let script_cmd = build_command("nmap", &["-sV", "-sC", "-sS", "-sU", "-p", "T:80,443,U:53,123"], &["<HOST>"], output_dir, Some("<HOST>"));
+        println!("{}\n", script_cmd);
+        
+        println!("=== END OF DRY RUN ===");
         return Ok(());
     }
 
@@ -198,4 +227,33 @@ fn parse_ports_from_gnmap(content: &str) -> Result<Vec<String>> {
         }
     }
     Ok(ports)
+}
+
+fn build_command(
+    program: &str,
+    nmap_args: &[&str],
+    targets: &[impl AsRef<str>],
+    output_dir: &str,
+    output_name: Option<&str>,
+) -> String {
+    let mut cmd_parts = vec![program.to_string()];
+    
+    // Add nmap args
+    for arg in nmap_args {
+        cmd_parts.push(arg.to_string());
+    }
+    
+    // Add output file args if specified
+    if let Some(out_name) = output_name {
+        let output_file_base = format!("{}/{}", output_dir, out_name);
+        cmd_parts.push("-oA".to_string());
+        cmd_parts.push(output_file_base);
+    }
+    
+    // Add targets
+    for target in targets {
+        cmd_parts.push(target.as_ref().to_string());
+    }
+    
+    cmd_parts.join(" ")
 }

@@ -23,6 +23,10 @@ struct Args {
     /// Directory for scan results
     #[arg(long, default_value = ".")]
     output_dir: String,
+
+    /// Dry run mode: print commands without executing them
+    #[arg(long)]
+    dry_run: bool,
 }
 
 #[tokio::main]
@@ -79,7 +83,7 @@ async fn main() -> Result<()> {
     }
 
     // Pass targets to scanner
-    scanner::run_scans(&targets, &args.output_dir).await?;
+    scanner::run_scans(&targets, &args.output_dir, args.dry_run).await?;
     
     Ok(())
 }
