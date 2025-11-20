@@ -2,7 +2,6 @@ use anyhow::{Context, Result};
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
-use tokio::signal;
 
 pub fn read_lines<P>(filename: P) -> Result<Vec<String>>
 where

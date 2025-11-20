@@ -25,7 +25,9 @@ pub async fn run_scans(targets: &[Target], output_dir: &str) -> Result<()> {
 
     // 1. Alive Host Discovery
     println!("\n--- Starting Alive Host Discovery (Ping Scan) ---");
-    let alive_hosts = run_nmap_scan("Alive Scan", &["-sn"], &target_strings, output_dir, "alive").await?;
+    // Use -oG - to output grepable format to stdout for parsing
+    let alive_output = run_nmap_scan("Alive Scan", &["-sn", "-oG", "-"], &target_strings, output_dir, None).await?;
+    let alive_hosts = parse_alive_hosts(&alive_output)?;
     
     if alive_hosts.is_empty() {
         println!("No alive hosts found. Exiting.");
@@ -35,45 +37,54 @@ pub async fn run_scans(targets: &[Target], output_dir: &str) -> Result<()> {
 
     // 2. TCP Port Scan (All ports)
     println!("\n--- Starting TCP Port Scan (All Ports) ---");
-    // Note: -p- scans all ports. This can be slow.
-    let _ = run_nmap_scan("TCP Scan", &["-p-"], &alive_hosts, output_dir, "tcp_all").await?;
+    // Use -oG - for parsing
+    let tcp_output = run_nmap_scan("TCP Scan", &["-p-", "-oG", "-"], &alive_hosts, output_dir, None).await?;
 
     // 3. UDP Port Scan (Top 1000)
     println!("\n--- Starting UDP Port Scan (Top 1000) ---");
-    let _ = run_nmap_scan("UDP Scan", &["-sU", "--top-ports", "1000"], &alive_hosts, output_dir, "udp_top1000").await?;
+    let udp_output = run_nmap_scan("UDP Scan", &["-sU", "--top-ports", "1000", "-oG", "-"], &alive_hosts, output_dir, None).await?;
 
     // 4. Service & Script Scan (Default Scripts + Version)
-    // Ideally we should parse the open ports from previous scans to speed this up, 
-    // but for simplicity/robustness (and per requirements "on the ports found"), 
-    // we might want to parse the XML/Grepable output.
-    // However, the user requirement says "run nmap with default scripts and version check on the ports found".
-    // Parsing Nmap output is complex. 
-    // A common shortcut is to let Nmap re-scan or use -p- again with -sV -sC, but that's slow.
-    // Let's try to parse the "tcp_all" output if possible, or just run -sV -sC on the alive hosts (which will re-scan top ports by default if no -p specified).
-    // BETTER APPROACH: Run -sV -sC on the alive hosts. If we want to be specific about ports, we need to parse.
-    // Given the complexity of parsing in this short timeframe, I will run -sV -sC on the alive hosts, 
-    // but I'll add -F (Fast scan) or --top-ports 1000 to keep it reasonable, OR just let Nmap decide.
-    // The requirement says "on the ports found in the previous two scans".
-    // I will implement a simple parser for the .gnmap file from the TCP scan to extract ports.
+    let tcp_ports = parse_ports_from_gnmap(&tcp_output)?;
+    let udp_ports = parse_ports_from_gnmap(&udp_output)?;
     
-    let open_ports = parse_ports_from_gnmap(&format!("{}/tcp_all.gnmap", output_dir))?;
-    let port_args = if open_ports.is_empty() {
-        println!("No open TCP ports found to run scripts on.");
-        vec![] 
-    } else {
-        vec!["-p".to_string(), open_ports.join(",")]
-    };
+    let mut combined_ports = String::new();
 
-    if !port_args.is_empty() {
+    if !tcp_ports.is_empty() {
+        combined_ports.push_str("T:");
+        combined_ports.push_str(&tcp_ports.join(","));
+    }
+    
+    if !udp_ports.is_empty() {
+        if !combined_ports.is_empty() {
+            combined_ports.push(',');
+        }
+        combined_ports.push_str("U:");
+        combined_ports.push_str(&udp_ports.join(","));
+    }
+
+    if !combined_ports.is_empty() {
         println!("\n--- Starting Service & Script Scan ---");
         
         // Construct the full command args manually for this one since we have dynamic ports
         let mut final_args = vec!["-sV", "-sC"];
-        let ports_str = open_ports.join(",");
-        final_args.push("-p");
-        final_args.push(&ports_str);
+        // If we have UDP ports, we must add -sU to the final scan to enable UDP scanning
+        if !udp_ports.is_empty() {
+            final_args.push("-sU");
+        }
+        // If we have TCP ports (or just to be safe), we usually imply -sS or -sT, but -sU mixed with TCP defaults to -sS for TCP.
+        // Nmap handles mixed scans fine if -sU is present.
         
-        run_nmap_scan("Script Scan", &final_args, &alive_hosts, output_dir, "scripts").await?;
+        final_args.push("-p");
+        final_args.push(&combined_ports);
+        
+        // This is the ONLY scan that saves to file
+        // Iterate over each host to save output with the IP as the filename
+        for host in alive_hosts {
+            println!("Scanning host: {}", host);
+            let single_target = vec![host.clone()];
+            run_nmap_scan("Script Scan", &final_args, &single_target, output_dir, Some(&host)).await?;
+        }
     } else {
         println!("Skipping script scan as no ports were found.");
     }
@@ -86,21 +97,24 @@ async fn run_nmap_scan(
     nmap_args: &[&str],
     targets: &[String],
     output_dir: &str,
-    output_name: &str,
-) -> Result<Vec<String>> {
-    let output_file_base = format!("{}/{}", output_dir, output_name);
-    
+    output_name: Option<&str>,
+) -> Result<String> {
     let mut cmd = Command::new("nmap");
-    cmd.args(nmap_args)
-       .arg("-oA")
-       .arg(&output_file_base)
-       .args(targets)
+    cmd.args(nmap_args);
+    
+    if let Some(out_name) = output_name {
+        let output_file_base = format!("{}/{}", output_dir, out_name);
+        cmd.arg("-oA").arg(&output_file_base);
+    }
+
+    cmd.args(targets)
        .stdout(Stdio::piped())
-       .stderr(Stdio::piped());
+       .stderr(Stdio::piped())
+       .kill_on_drop(true);
 
     println!("Running: {:?}", cmd);
 
-    let mut child = cmd.spawn().context("Failed to spawn nmap")?;
+    let child = cmd.spawn().context("Failed to spawn nmap")?;
     
     // Progress bar (spinner)
     let pb = ProgressBar::new_spinner();
@@ -110,42 +124,35 @@ async fn run_nmap_scan(
 
     // Wait for child or Ctrl+C
     tokio::select! {
-        status = child.wait() => {
+        output_result = child.wait_with_output() => {
             pb.finish_with_message(format!("{} finished.", name));
-            match status {
-                Ok(s) if s.success() => {
-                    // If this was the Alive scan, we need to parse the output to find alive hosts.
-                    // We can parse the .gnmap file.
-                    if output_name == "alive" {
-                        return parse_alive_hosts(&format!("{}.gnmap", output_file_base));
-                    }
-                    // For other scans, just return the targets as "passed"
-                    Ok(targets.to_vec())
+            match output_result {
+                Ok(output) if output.status.success() => {
+                    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                    Ok(stdout)
                 }
-                Ok(s) => {
-                    eprintln!("Nmap failed with status: {}", s);
-                    Ok(vec![])
+                Ok(output) => {
+                    eprintln!("Nmap failed with status: {}", output.status);
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    eprintln!("Stderr: {}", stderr);
+                    Ok(String::new())
                 }
                 Err(e) => {
                     eprintln!("Failed to wait for nmap: {}", e);
-                    Ok(vec![])
+                    Ok(String::new())
                 }
             }
         }
         _ = signal::ctrl_c() => {
             pb.finish_with_message(format!("{} skipped by user.", name));
-            let _ = child.kill().await;
+            // Child is dropped here, and kill_on_drop(true) ensures it's killed.
             println!("\nSkipping {}...", name);
-            Ok(vec![]) // Return empty or original targets? 
-                       // If we skip alive scan, we can't proceed effectively.
-                       // But if we skip port scan, we might want to proceed?
-                       // For simplicity, return empty which might stop dependent steps.
+            Ok(String::new())
         }
     }
 }
 
-fn parse_alive_hosts(gnmap_path: &str) -> Result<Vec<String>> {
-    let content = std::fs::read_to_string(gnmap_path).context("Failed to read gnmap file")?;
+fn parse_alive_hosts(content: &str) -> Result<Vec<String>> {
     let mut alive = Vec::new();
     for line in content.lines() {
         if line.contains("Status: Up") {
@@ -160,12 +167,8 @@ fn parse_alive_hosts(gnmap_path: &str) -> Result<Vec<String>> {
     Ok(alive)
 }
 
-fn parse_ports_from_gnmap(gnmap_path: &str) -> Result<Vec<String>> {
+fn parse_ports_from_gnmap(content: &str) -> Result<Vec<String>> {
     // Format: Host: 192.168.1.1 ()	Ports: 22/open/tcp//ssh///, 80/open/tcp//http///
-    if !std::path::Path::new(gnmap_path).exists() {
-        return Ok(vec![]);
-    }
-    let content = std::fs::read_to_string(gnmap_path).context("Failed to read gnmap file")?;
     let mut ports = Vec::new();
     for line in content.lines() {
         if let Some(ports_part) = line.split("Ports: ").nth(1) {

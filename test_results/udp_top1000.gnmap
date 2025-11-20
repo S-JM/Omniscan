@@ -1,4 +1,0 @@
-# Nmap 7.93 scan initiated Thu Nov 20 09:50:50 2025 as: nmap -sU --top-ports 1000 -oA test_results/udp_top1000 127.0.0.1
-Host: 127.0.0.1 (view-localhost)	Status: Up
-Host: 127.0.0.1 (view-localhost)	Ports: 123/open|filtered/udp//ntp///, 137/open|filtered/udp//netbios-ns///, 500/open|filtered/udp//isakmp///, 1900/open|filtered/udp//upnp///, 3702/open|filtered/udp//ws-discovery///, 4500/open|filtered/udp//nat-t-ike///, 5050/open|filtered/udp//mmcc///, 5353/open|filtered/udp//zeroconf///, 5355/open|filtered/udp//llmnr///	Ignored State: closed (991)
-# Nmap done at Thu Nov 20 09:55:15 2025 -- 1 IP address (1 host up) scanned in 264.81 seconds
