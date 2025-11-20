@@ -29,8 +29,6 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool) -> R
 
     // If dry-run mode, build and print all commands without executing
     if dry_run {
-        println!("=== DRY RUN MODE: Commands that would be executed ===\n");
-        
         // 1. Alive Host Discovery
         let alive_cmd = build_command("nmap", &["-sn", "-oG", "-"], &target_strings, output_dir, None);
         println!("# Alive Host Discovery (Ping Scan)");
@@ -52,7 +50,6 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool) -> R
         let script_cmd = build_command("nmap", &["-sV", "-sC", "-sS", "-sU", "-p", "T:80,443,U:53,123"], &["<HOST>"], output_dir, Some("<HOST>"));
         println!("{}\n", script_cmd);
         
-        println!("=== END OF DRY RUN ===");
         return Ok(());
     }
 
