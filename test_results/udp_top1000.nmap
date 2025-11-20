@@ -1,0 +1,16 @@
+# Nmap 7.93 scan initiated Thu Nov 20 09:50:50 2025 as: nmap -sU --top-ports 1000 -oA test_results/udp_top1000 127.0.0.1
+Nmap scan report for view-localhost (127.0.0.1)
+Host is up (0.00029s latency).
+Not shown: 991 closed udp ports (port-unreach)
+PORT     STATE         SERVICE
+123/udp  open|filtered ntp
+137/udp  open|filtered netbios-ns
+500/udp  open|filtered isakmp
+1900/udp open|filtered upnp
+3702/udp open|filtered ws-discovery
+4500/udp open|filtered nat-t-ike
+5050/udp open|filtered mmcc
+5353/udp open|filtered zeroconf
+5355/udp open|filtered llmnr
+
+# Nmap done at Thu Nov 20 09:55:15 2025 -- 1 IP address (1 host up) scanned in 264.81 seconds

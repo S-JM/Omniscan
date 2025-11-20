@@ -1,0 +1,4 @@
+# Nmap 7.93 scan initiated Thu Nov 20 09:50:40 2025 as: nmap -sn -oA test_results/alive 127.0.0.1
+Nmap scan report for view-localhost (127.0.0.1)
+Host is up.
+# Nmap done at Thu Nov 20 09:50:43 2025 -- 1 IP address (1 host up) scanned in 3.01 seconds

@@ -1,0 +1,4 @@
+# Nmap 7.93 scan initiated Thu Nov 20 09:50:43 2025 as: nmap -p- -oA test_results/tcp_all 127.0.0.1
+Host: 127.0.0.1 (view-localhost)	Status: Up
+Host: 127.0.0.1 (view-localhost)	Ports: 135/open/tcp//msrpc///, 137/filtered/tcp//netbios-ns///, 445/open/tcp//microsoft-ds///, 902/open/tcp//iss-realsecure///, 912/open/tcp//apex-mesh///, 2179/open/tcp//vmrdp///, 4767/open/tcp//unknown///, 5040/open/tcp//unknown///, 5354/open/tcp//mdnsresponder///, 5357/open/tcp//wsdapi///, 5939/open/tcp//unknown///, 6463/open/tcp/////, 9101/open/tcp//jetdirect///, 12232/open/tcp/////, 12234/open/tcp/////, 12235/open/tcp/////, 12240/open/tcp//unknown///, 29385/open/tcp/////, 49664/open/tcp/////, 49665/open/tcp/////, 49666/open/tcp/////, 49667/open/tcp/////, 49668/open/tcp/////, 49676/open/tcp/////, 50128/open/tcp/////	Ignored State: closed (65510)
+# Nmap done at Thu Nov 20 09:50:50 2025 -- 1 IP address (1 host up) scanned in 7.20 seconds

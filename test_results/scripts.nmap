@@ -1,0 +1,308 @@
+# Nmap 7.93 scan initiated Thu Nov 20 09:55:16 2025 as: nmap -sV -sC -p 135,445,902,912,2179,4767,5040,5354,5357,5939,6463,9101,12232,12234,12235,12240,29385,49664,49665,49666,49667,49668,49676,50128 -oA test_results/scripts 127.0.0.1
+Nmap scan report for view-localhost (127.0.0.1)
+Host is up (0.00056s latency).
+
+PORT      STATE SERVICE         VERSION
+135/tcp   open  msrpc           Microsoft Windows RPC
+445/tcp   open  microsoft-ds?
+902/tcp   open  ssl/vmware-auth VMware Authentication Daemon 1.10 (Uses VNC, SOAP)
+912/tcp   open  vmware-auth     VMware Authentication Daemon 1.0 (Uses VNC, SOAP)
+2179/tcp  open  vmrdp?
+4767/tcp  open  unknown
+5040/tcp  open  unknown
+5354/tcp  open  mdnsresponder?
+5357/tcp  open  http            Microsoft HTTPAPI httpd 2.0 (SSDP/UPnP)
+|_http-title: Service Unavailable
+|_http-server-header: Microsoft-HTTPAPI/2.0
+5939/tcp  open  unknown
+6463/tcp  open  unknown
+| fingerprint-strings: 
+|   DNSStatusRequestTCP, DNSVersionBindReqTCP, Help, Kerberos, LDAPSearchReq, LPDString, RPCCheck, SMBProgNeg, SSLSessionReq, TLSSessionReq, TerminalServerCookie, X11Probe: 
+|     HTTP/1.1 400 Bad Request
+|     Connection: close
+|   FourOhFourRequest, GetRequest, HTTPOptions, RTSPRequest: 
+|     HTTP/1.1 404 Not Found
+|     Content-Length: 32
+|     Content-Type: application/json
+|     Date: Thu, 20 Nov 2025 14:55:43 GMT
+|     Connection: close
+|_    {"code":0,"message":"Not Found"}
+9101/tcp  open  jetdirect?
+12232/tcp open  unknown
+| fingerprint-strings: 
+|   DNSStatusRequestTCP, DNSVersionBindReqTCP, Help, Kerberos, LDAPBindReq, LDAPSearchReq, LPDString, RPCCheck, SIPOptions, SMBProgNeg, SSLSessionReq, TLSSessionReq, TerminalServerCookie, X11Probe: 
+|     HTTP/1.1 400 Bad Request
+|     Connection: close
+|   FourOhFourRequest, GetRequest, HTTPOptions, RTSPRequest: 
+|     HTTP/1.1 403 Forbidden
+|     Content-Type: text/plain
+|     Date: Thu, 20 Nov 2025 14:55:43 GMT
+|     Connection: close
+|_    Invalid CSRF token
+12234/tcp open  ssl/unknown
+| fingerprint-strings: 
+|   FourOhFourRequest: 
+|     HTTP/1.0 404 Not Found
+|     Content-Type: text/plain; charset=utf-8
+|     Vary: Origin
+|     X-Content-Type-Options: nosniff
+|     Date: Thu, 20 Nov 2025 14:56:14 GMT
+|     Content-Length: 19
+|     page not found
+|   GenericLines, Help, Kerberos, LPDString, RTSPRequest, SSLSessionReq, TLSSessionReq, TerminalServerCookie: 
+|     HTTP/1.1 400 Bad Request
+|     Content-Type: text/plain; charset=utf-8
+|     Connection: close
+|     Request
+|   GetRequest, HTTPOptions: 
+|     HTTP/1.0 404 Not Found
+|     Content-Type: text/plain; charset=utf-8
+|     Vary: Origin
+|     X-Content-Type-Options: nosniff
+|     Date: Thu, 20 Nov 2025 14:55:49 GMT
+|     Content-Length: 19
+|_    page not found
+|_ssl-date: TLS randomness does not represent time
+| ssl-cert: Subject: commonName=localhost/organizationName=ENABLES HTTP2
+| Subject Alternative Name: DNS:localhost, IP Address:127.0.0.1
+| Not valid before: 2025-09-04T20:55:04
+|_Not valid after:  2026-09-04T20:55:04
+12235/tcp open  unknown
+| fingerprint-strings: 
+|   FourOhFourRequest: 
+|     HTTP/1.0 404 Not Found
+|     Content-Type: text/plain; charset=utf-8
+|     Vary: Origin
+|     X-Content-Type-Options: nosniff
+|     Date: Thu, 20 Nov 2025 14:56:16 GMT
+|     Content-Length: 19
+|     page not found
+|   GetRequest, HTTPOptions: 
+|     HTTP/1.0 404 Not Found
+|     Content-Type: text/plain; charset=utf-8
+|     Vary: Origin
+|     X-Content-Type-Options: nosniff
+|     Date: Thu, 20 Nov 2025 14:55:43 GMT
+|     Content-Length: 19
+|     page not found
+|   Kerberos, LDAPSearchReq, RTSPRequest, SIPOptions, SSLSessionReq, TLSSessionReq, TerminalServerCookie: 
+|     HTTP/1.1 400 Bad Request
+|     Content-Type: text/plain; charset=utf-8
+|     Connection: close
+|_    Request
+12240/tcp open  unknown
+29385/tcp open  unknown
+| fingerprint-strings: 
+|   GetRequest, HTTPOptions: 
+|     HTTP/1.1 200 OK
+|     Content-Type: text/html
+|     Date: Thu, 20 Nov 2025 14:55:43 GMT
+|     Connection: close
+|     <!DOCTYPE html>
+|     <html>
+|     <head>
+|     <link rel="stylesheet" href="browser.css">
+|     <link rel="icon" type="image/svg+xml" href="antigravity.svg">
+|     <title>Browser</title>
+|     </head>
+|     <body>
+|     <div class="animated-background">
+|     <div class="gradient-orb orb-1"></div>
+|     <div class="gradient-orb orb-2"></div>
+|     <div class="gradient-orb orb-3"></div>
+|     </div>
+|     <div class="landing-container">
+|     <div class="onboarding-card">
+|     <div class="icon-container">
+|     <img src="antigravity.svg" alt="Antigravity" class="browser-icon">
+|     </div>
+|     class="welcome-text">Welcome to</h3>
+|     <div class="title-container">
+|     class="main-title">Antigravity Browser Control</h1>
+|     class="preview-pill">Preview</p>
+|     </div>
+|     class="title-divider">
+|     class="hero-title">Getting Started</h2>
+|_    class
+49664/tcp open  msrpc           Microsoft Windows RPC
+49665/tcp open  msrpc           Microsoft Windows RPC
+49666/tcp open  msrpc           Microsoft Windows RPC
+49667/tcp open  msrpc           Microsoft Windows RPC
+49668/tcp open  msrpc           Microsoft Windows RPC
+49676/tcp open  msrpc           Microsoft Windows RPC
+50128/tcp open  http            Microsoft HTTPAPI httpd 2.0 (SSDP/UPnP)
+|_http-title: Bad Request
+|_http-server-header: Microsoft-HTTPAPI/2.0
+5 services unrecognized despite returning data. If you know the service/version, please submit the following fingerprints at https://nmap.org/cgi-bin/submit.cgi?new-service :
+==============NEXT SERVICE FINGERPRINT (SUBMIT INDIVIDUALLY)==============
+SF-Port6463-TCP:V=7.93%I=7%D=11/20%Time=691F2BEF%P=i686-pc-windows-windows
+SF:%r(GetRequest,A6,"HTTP/1\.1\x20404\x20Not\x20Found\r\nContent-Length:\x
+SF:2032\r\nContent-Type:\x20application/json\r\nDate:\x20Thu,\x2020\x20Nov
+SF:\x202025\x2014:55:43\x20GMT\r\nConnection:\x20close\r\n\r\n{\"code\":0,
+SF:\"message\":\"Not\x20Found\"}")%r(HTTPOptions,A6,"HTTP/1\.1\x20404\x20N
+SF:ot\x20Found\r\nContent-Length:\x2032\r\nContent-Type:\x20application/js
+SF:on\r\nDate:\x20Thu,\x2020\x20Nov\x202025\x2014:55:43\x20GMT\r\nConnecti
+SF:on:\x20close\r\n\r\n{\"code\":0,\"message\":\"Not\x20Found\"}")%r(RTSPR
+SF:equest,A6,"HTTP/1\.1\x20404\x20Not\x20Found\r\nContent-Length:\x2032\r\
+SF:nContent-Type:\x20application/json\r\nDate:\x20Thu,\x2020\x20Nov\x20202
+SF:5\x2014:55:43\x20GMT\r\nConnection:\x20close\r\n\r\n{\"code\":0,\"messa
+SF:ge\":\"Not\x20Found\"}")%r(RPCCheck,2F,"HTTP/1\.1\x20400\x20Bad\x20Requ
+SF:est\r\nConnection:\x20close\r\n\r\n")%r(DNSVersionBindReqTCP,2F,"HTTP/1
+SF:\.1\x20400\x20Bad\x20Request\r\nConnection:\x20close\r\n\r\n")%r(DNSSta
+SF:tusRequestTCP,2F,"HTTP/1\.1\x20400\x20Bad\x20Request\r\nConnection:\x20
+SF:close\r\n\r\n")%r(Help,2F,"HTTP/1\.1\x20400\x20Bad\x20Request\r\nConnec
+SF:tion:\x20close\r\n\r\n")%r(SSLSessionReq,2F,"HTTP/1\.1\x20400\x20Bad\x2
+SF:0Request\r\nConnection:\x20close\r\n\r\n")%r(TerminalServerCookie,2F,"H
+SF:TTP/1\.1\x20400\x20Bad\x20Request\r\nConnection:\x20close\r\n\r\n")%r(T
+SF:LSSessionReq,2F,"HTTP/1\.1\x20400\x20Bad\x20Request\r\nConnection:\x20c
+SF:lose\r\n\r\n")%r(Kerberos,2F,"HTTP/1\.1\x20400\x20Bad\x20Request\r\nCon
+SF:nection:\x20close\r\n\r\n")%r(SMBProgNeg,2F,"HTTP/1\.1\x20400\x20Bad\x2
+SF:0Request\r\nConnection:\x20close\r\n\r\n")%r(X11Probe,2F,"HTTP/1\.1\x20
+SF:400\x20Bad\x20Request\r\nConnection:\x20close\r\n\r\n")%r(FourOhFourReq
+SF:uest,A6,"HTTP/1\.1\x20404\x20Not\x20Found\r\nContent-Length:\x2032\r\nC
+SF:ontent-Type:\x20application/json\r\nDate:\x20Thu,\x2020\x20Nov\x202025\
+SF:x2014:55:43\x20GMT\r\nConnection:\x20close\r\n\r\n{\"code\":0,\"message
+SF:\":\"Not\x20Found\"}")%r(LPDString,2F,"HTTP/1\.1\x20400\x20Bad\x20Reque
+SF:st\r\nConnection:\x20close\r\n\r\n")%r(LDAPSearchReq,2F,"HTTP/1\.1\x204
+SF:00\x20Bad\x20Request\r\nConnection:\x20close\r\n\r\n");
+==============NEXT SERVICE FINGERPRINT (SUBMIT INDIVIDUALLY)==============
+SF-Port12232-TCP:V=7.93%I=7%D=11/20%Time=691F2BEF%P=i686-pc-windows-window
+SF:s%r(GetRequest,7E,"HTTP/1\.1\x20403\x20Forbidden\r\nContent-Type:\x20te
+SF:xt/plain\r\nDate:\x20Thu,\x2020\x20Nov\x202025\x2014:55:43\x20GMT\r\nCo
+SF:nnection:\x20close\r\n\r\nInvalid\x20CSRF\x20token")%r(HTTPOptions,7E,"
+SF:HTTP/1\.1\x20403\x20Forbidden\r\nContent-Type:\x20text/plain\r\nDate:\x
+SF:20Thu,\x2020\x20Nov\x202025\x2014:55:43\x20GMT\r\nConnection:\x20close\
+SF:r\n\r\nInvalid\x20CSRF\x20token")%r(RTSPRequest,7E,"HTTP/1\.1\x20403\x2
+SF:0Forbidden\r\nContent-Type:\x20text/plain\r\nDate:\x20Thu,\x2020\x20Nov
+SF:\x202025\x2014:55:43\x20GMT\r\nConnection:\x20close\r\n\r\nInvalid\x20C
+SF:SRF\x20token")%r(RPCCheck,2F,"HTTP/1\.1\x20400\x20Bad\x20Request\r\nCon
+SF:nection:\x20close\r\n\r\n")%r(DNSVersionBindReqTCP,2F,"HTTP/1\.1\x20400
+SF:\x20Bad\x20Request\r\nConnection:\x20close\r\n\r\n")%r(DNSStatusRequest
+SF:TCP,2F,"HTTP/1\.1\x20400\x20Bad\x20Request\r\nConnection:\x20close\r\n\
+SF:r\n")%r(Help,2F,"HTTP/1\.1\x20400\x20Bad\x20Request\r\nConnection:\x20c
+SF:lose\r\n\r\n")%r(SSLSessionReq,2F,"HTTP/1\.1\x20400\x20Bad\x20Request\r
+SF:\nConnection:\x20close\r\n\r\n")%r(TerminalServerCookie,2F,"HTTP/1\.1\x
+SF:20400\x20Bad\x20Request\r\nConnection:\x20close\r\n\r\n")%r(TLSSessionR
+SF:eq,2F,"HTTP/1\.1\x20400\x20Bad\x20Request\r\nConnection:\x20close\r\n\r
+SF:\n")%r(Kerberos,2F,"HTTP/1\.1\x20400\x20Bad\x20Request\r\nConnection:\x
+SF:20close\r\n\r\n")%r(SMBProgNeg,2F,"HTTP/1\.1\x20400\x20Bad\x20Request\r
+SF:\nConnection:\x20close\r\n\r\n")%r(X11Probe,2F,"HTTP/1\.1\x20400\x20Bad
+SF:\x20Request\r\nConnection:\x20close\r\n\r\n")%r(FourOhFourRequest,7E,"H
+SF:TTP/1\.1\x20403\x20Forbidden\r\nContent-Type:\x20text/plain\r\nDate:\x2
+SF:0Thu,\x2020\x20Nov\x202025\x2014:55:43\x20GMT\r\nConnection:\x20close\r
+SF:\n\r\nInvalid\x20CSRF\x20token")%r(LPDString,2F,"HTTP/1\.1\x20400\x20Ba
+SF:d\x20Request\r\nConnection:\x20close\r\n\r\n")%r(LDAPSearchReq,2F,"HTTP
+SF:/1\.1\x20400\x20Bad\x20Request\r\nConnection:\x20close\r\n\r\n")%r(LDAP
+SF:BindReq,2F,"HTTP/1\.1\x20400\x20Bad\x20Request\r\nConnection:\x20close\
+SF:r\n\r\n")%r(SIPOptions,2F,"HTTP/1\.1\x20400\x20Bad\x20Request\r\nConnec
+SF:tion:\x20close\r\n\r\n");
+==============NEXT SERVICE FINGERPRINT (SUBMIT INDIVIDUALLY)==============
+SF-Port12234-TCP:V=7.93%T=SSL%I=7%D=11/20%Time=691F2BF5%P=i686-pc-windows-
+SF:windows%r(GenericLines,67,"HTTP/1\.1\x20400\x20Bad\x20Request\r\nConten
+SF:t-Type:\x20text/plain;\x20charset=utf-8\r\nConnection:\x20close\r\n\r\n
+SF:400\x20Bad\x20Request")%r(GetRequest,BE,"HTTP/1\.0\x20404\x20Not\x20Fou
+SF:nd\r\nContent-Type:\x20text/plain;\x20charset=utf-8\r\nVary:\x20Origin\
+SF:r\nX-Content-Type-Options:\x20nosniff\r\nDate:\x20Thu,\x2020\x20Nov\x20
+SF:2025\x2014:55:49\x20GMT\r\nContent-Length:\x2019\r\n\r\n404\x20page\x20
+SF:not\x20found\n")%r(HTTPOptions,BE,"HTTP/1\.0\x20404\x20Not\x20Found\r\n
+SF:Content-Type:\x20text/plain;\x20charset=utf-8\r\nVary:\x20Origin\r\nX-C
+SF:ontent-Type-Options:\x20nosniff\r\nDate:\x20Thu,\x2020\x20Nov\x202025\x
+SF:2014:55:49\x20GMT\r\nContent-Length:\x2019\r\n\r\n404\x20page\x20not\x2
+SF:0found\n")%r(RTSPRequest,67,"HTTP/1\.1\x20400\x20Bad\x20Request\r\nCont
+SF:ent-Type:\x20text/plain;\x20charset=utf-8\r\nConnection:\x20close\r\n\r
+SF:\n400\x20Bad\x20Request")%r(Help,67,"HTTP/1\.1\x20400\x20Bad\x20Request
+SF:\r\nContent-Type:\x20text/plain;\x20charset=utf-8\r\nConnection:\x20clo
+SF:se\r\n\r\n400\x20Bad\x20Request")%r(SSLSessionReq,67,"HTTP/1\.1\x20400\
+SF:x20Bad\x20Request\r\nContent-Type:\x20text/plain;\x20charset=utf-8\r\nC
+SF:onnection:\x20close\r\n\r\n400\x20Bad\x20Request")%r(TerminalServerCook
+SF:ie,67,"HTTP/1\.1\x20400\x20Bad\x20Request\r\nContent-Type:\x20text/plai
+SF:n;\x20charset=utf-8\r\nConnection:\x20close\r\n\r\n400\x20Bad\x20Reques
+SF:t")%r(TLSSessionReq,67,"HTTP/1\.1\x20400\x20Bad\x20Request\r\nContent-T
+SF:ype:\x20text/plain;\x20charset=utf-8\r\nConnection:\x20close\r\n\r\n400
+SF:\x20Bad\x20Request")%r(Kerberos,67,"HTTP/1\.1\x20400\x20Bad\x20Request\
+SF:r\nContent-Type:\x20text/plain;\x20charset=utf-8\r\nConnection:\x20clos
+SF:e\r\n\r\n400\x20Bad\x20Request")%r(FourOhFourRequest,BE,"HTTP/1\.0\x204
+SF:04\x20Not\x20Found\r\nContent-Type:\x20text/plain;\x20charset=utf-8\r\n
+SF:Vary:\x20Origin\r\nX-Content-Type-Options:\x20nosniff\r\nDate:\x20Thu,\
+SF:x2020\x20Nov\x202025\x2014:56:14\x20GMT\r\nContent-Length:\x2019\r\n\r\
+SF:n404\x20page\x20not\x20found\n")%r(LPDString,67,"HTTP/1\.1\x20400\x20Ba
+SF:d\x20Request\r\nContent-Type:\x20text/plain;\x20charset=utf-8\r\nConnec
+SF:tion:\x20close\r\n\r\n400\x20Bad\x20Request");
+==============NEXT SERVICE FINGERPRINT (SUBMIT INDIVIDUALLY)==============
+SF-Port12235-TCP:V=7.93%I=7%D=11/20%Time=691F2BEF%P=i686-pc-windows-window
+SF:s%r(GetRequest,BE,"HTTP/1\.0\x20404\x20Not\x20Found\r\nContent-Type:\x2
+SF:0text/plain;\x20charset=utf-8\r\nVary:\x20Origin\r\nX-Content-Type-Opti
+SF:ons:\x20nosniff\r\nDate:\x20Thu,\x2020\x20Nov\x202025\x2014:55:43\x20GM
+SF:T\r\nContent-Length:\x2019\r\n\r\n404\x20page\x20not\x20found\n")%r(HTT
+SF:POptions,BE,"HTTP/1\.0\x20404\x20Not\x20Found\r\nContent-Type:\x20text/
+SF:plain;\x20charset=utf-8\r\nVary:\x20Origin\r\nX-Content-Type-Options:\x
+SF:20nosniff\r\nDate:\x20Thu,\x2020\x20Nov\x202025\x2014:55:43\x20GMT\r\nC
+SF:ontent-Length:\x2019\r\n\r\n404\x20page\x20not\x20found\n")%r(RTSPReque
+SF:st,67,"HTTP/1\.1\x20400\x20Bad\x20Request\r\nContent-Type:\x20text/plai
+SF:n;\x20charset=utf-8\r\nConnection:\x20close\r\n\r\n400\x20Bad\x20Reques
+SF:t")%r(SSLSessionReq,67,"HTTP/1\.1\x20400\x20Bad\x20Request\r\nContent-T
+SF:ype:\x20text/plain;\x20charset=utf-8\r\nConnection:\x20close\r\n\r\n400
+SF:\x20Bad\x20Request")%r(TerminalServerCookie,67,"HTTP/1\.1\x20400\x20Bad
+SF:\x20Request\r\nContent-Type:\x20text/plain;\x20charset=utf-8\r\nConnect
+SF:ion:\x20close\r\n\r\n400\x20Bad\x20Request")%r(TLSSessionReq,67,"HTTP/1
+SF:\.1\x20400\x20Bad\x20Request\r\nContent-Type:\x20text/plain;\x20charset
+SF:=utf-8\r\nConnection:\x20close\r\n\r\n400\x20Bad\x20Request")%r(Kerbero
+SF:s,67,"HTTP/1\.1\x20400\x20Bad\x20Request\r\nContent-Type:\x20text/plain
+SF:;\x20charset=utf-8\r\nConnection:\x20close\r\n\r\n400\x20Bad\x20Request
+SF:")%r(FourOhFourRequest,BE,"HTTP/1\.0\x20404\x20Not\x20Found\r\nContent-
+SF:Type:\x20text/plain;\x20charset=utf-8\r\nVary:\x20Origin\r\nX-Content-T
+SF:ype-Options:\x20nosniff\r\nDate:\x20Thu,\x2020\x20Nov\x202025\x2014:56:
+SF:16\x20GMT\r\nContent-Length:\x2019\r\n\r\n404\x20page\x20not\x20found\n
+SF:")%r(LDAPSearchReq,67,"HTTP/1\.1\x20400\x20Bad\x20Request\r\nContent-Ty
+SF:pe:\x20text/plain;\x20charset=utf-8\r\nConnection:\x20close\r\n\r\n400\
+SF:x20Bad\x20Request")%r(SIPOptions,67,"HTTP/1\.1\x20400\x20Bad\x20Request
+SF:\r\nContent-Type:\x20text/plain;\x20charset=utf-8\r\nConnection:\x20clo
+SF:se\r\n\r\n400\x20Bad\x20Request");
+==============NEXT SERVICE FINGERPRINT (SUBMIT INDIVIDUALLY)==============
+SF-Port29385-TCP:V=7.93%I=7%D=11/20%Time=691F2BEF%P=i686-pc-windows-window
+SF:s%r(GetRequest,D84,"HTTP/1\.1\x20200\x20OK\r\nContent-Type:\x20text/htm
+SF:l\r\nDate:\x20Thu,\x2020\x20Nov\x202025\x2014:55:43\x20GMT\r\nConnectio
+SF:n:\x20close\r\n\r\n<!DOCTYPE\x20html>\n<html>\n\n<head>\n\t<link\x20rel
+SF:=\"stylesheet\"\x20href=\"browser\.css\">\n\t<link\x20rel=\"icon\"\x20t
+SF:ype=\"image/svg\+xml\"\x20href=\"antigravity\.svg\">\n\t<title>Browser<
+SF:/title>\n</head>\n\n<body>\n\t<div\x20class=\"animated-background\">\n\
+SF:t\t<div\x20class=\"gradient-orb\x20orb-1\"></div>\n\t\t<div\x20class=\"
+SF:gradient-orb\x20orb-2\"></div>\n\t\t<div\x20class=\"gradient-orb\x20orb
+SF:-3\"></div>\n\t</div>\n\n\t<div\x20class=\"landing-container\">\n\t\t<d
+SF:iv\x20class=\"onboarding-card\">\n\t\t\t<div\x20class=\"icon-container\
+SF:">\n\t\t\t\t<img\x20src=\"antigravity\.svg\"\x20alt=\"Antigravity\"\x20
+SF:class=\"browser-icon\">\n\t\t\t</div>\n\t\t\t<h3\x20class=\"welcome-tex
+SF:t\">Welcome\x20to</h3>\n\t\t\t<div\x20class=\"title-container\">\n\t\t\
+SF:t\t<h1\x20class=\"main-title\">Antigravity\x20Browser\x20Control</h1>\n
+SF:\t\t\t\t<p\x20class=\"preview-pill\">Preview</p>\n\t\t\t</div>\n\t\t\t<
+SF:hr\x20class=\"title-divider\">\n\n\t\t\t<h2\x20class=\"hero-title\">Get
+SF:ting\x20Started</h2>\n\n\t\t\t<p\x20class")%r(HTTPOptions,D84,"HTTP/1\.
+SF:1\x20200\x20OK\r\nContent-Type:\x20text/html\r\nDate:\x20Thu,\x2020\x20
+SF:Nov\x202025\x2014:55:43\x20GMT\r\nConnection:\x20close\r\n\r\n<!DOCTYPE
+SF:\x20html>\n<html>\n\n<head>\n\t<link\x20rel=\"stylesheet\"\x20href=\"br
+SF:owser\.css\">\n\t<link\x20rel=\"icon\"\x20type=\"image/svg\+xml\"\x20hr
+SF:ef=\"antigravity\.svg\">\n\t<title>Browser</title>\n</head>\n\n<body>\n
+SF:\t<div\x20class=\"animated-background\">\n\t\t<div\x20class=\"gradient-
+SF:orb\x20orb-1\"></div>\n\t\t<div\x20class=\"gradient-orb\x20orb-2\"></di
+SF:v>\n\t\t<div\x20class=\"gradient-orb\x20orb-3\"></div>\n\t</div>\n\n\t<
+SF:div\x20class=\"landing-container\">\n\t\t<div\x20class=\"onboarding-car
+SF:d\">\n\t\t\t<div\x20class=\"icon-container\">\n\t\t\t\t<img\x20src=\"an
+SF:tigravity\.svg\"\x20alt=\"Antigravity\"\x20class=\"browser-icon\">\n\t\
+SF:t\t</div>\n\t\t\t<h3\x20class=\"welcome-text\">Welcome\x20to</h3>\n\t\t
+SF:\t<div\x20class=\"title-container\">\n\t\t\t\t<h1\x20class=\"main-title
+SF:\">Antigravity\x20Browser\x20Control</h1>\n\t\t\t\t<p\x20class=\"previe
+SF:w-pill\">Preview</p>\n\t\t\t</div>\n\t\t\t<hr\x20class=\"title-divider\
+SF:">\n\n\t\t\t<h2\x20class=\"hero-title\">Getting\x20Started</h2>\n\n\t\t
+SF:\t<p\x20class");
+Service Info: OS: Windows; CPE: cpe:/o:microsoft:windows
+
+Host script results:
+| smb2-security-mode: 
+|   311: 
+|_    Message signing enabled but not required
+| smb2-time: 
+|   date: 2025-11-20T14:58:12
+|_  start_date: N/A
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+# Nmap done at Thu Nov 20 09:58:40 2025 -- 1 IP address (1 host up) scanned in 203.73 seconds

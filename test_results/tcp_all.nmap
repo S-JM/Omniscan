@@ -1,0 +1,32 @@
+# Nmap 7.93 scan initiated Thu Nov 20 09:50:43 2025 as: nmap -p- -oA test_results/tcp_all 127.0.0.1
+Nmap scan report for view-localhost (127.0.0.1)
+Host is up (0.00028s latency).
+Not shown: 65510 closed tcp ports (reset)
+PORT      STATE    SERVICE
+135/tcp   open     msrpc
+137/tcp   filtered netbios-ns
+445/tcp   open     microsoft-ds
+902/tcp   open     iss-realsecure
+912/tcp   open     apex-mesh
+2179/tcp  open     vmrdp
+4767/tcp  open     unknown
+5040/tcp  open     unknown
+5354/tcp  open     mdnsresponder
+5357/tcp  open     wsdapi
+5939/tcp  open     unknown
+6463/tcp  open     unknown
+9101/tcp  open     jetdirect
+12232/tcp open     unknown
+12234/tcp open     unknown
+12235/tcp open     unknown
+12240/tcp open     unknown
+29385/tcp open     unknown
+49664/tcp open     unknown
+49665/tcp open     unknown
+49666/tcp open     unknown
+49667/tcp open     unknown
+49668/tcp open     unknown
+49676/tcp open     unknown
+50128/tcp open     unknown
+
+# Nmap done at Thu Nov 20 09:50:50 2025 -- 1 IP address (1 host up) scanned in 7.20 seconds
