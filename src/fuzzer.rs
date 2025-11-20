@@ -62,6 +62,9 @@ pub async fn fuzz_subdomains(
             let subdomain_clone = subdomain.clone();
             
             tasks.push(async move {
+                // Small delay to avoid overwhelming DNS server
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                
                 match resolver.lookup_ip(&subdomain_clone).await {
                     Ok(response) => {
                         let ips: Vec<IpAddr> = response.iter().collect();
@@ -73,14 +76,17 @@ pub async fn fuzz_subdomains(
         }
     }
 
-    // Run up to 100 concurrent lookups
-    let mut stream = stream::iter(tasks).buffer_unordered(100);
+    // Run up to 20 concurrent lookups (reduced from 100 to avoid DNS throttling)
+    let mut stream = stream::iter(tasks).buffer_unordered(20);
 
     let total_checks = wordlist.len() * domains.len();
     let mut checked = 0;
     let mut last_update = std::time::Instant::now();
     let update_interval = std::time::Duration::from_secs(5);
 
+    if verbose {
+        eprintln!("[VERBOSE] Starting DNS lookups with concurrency=20 and 10ms delay per request");
+    }
     println!("Starting fuzzing: {} total subdomain checks", total_checks);
 
     while let Some(result) = stream.next().await {
