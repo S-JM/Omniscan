@@ -62,7 +62,24 @@ pub async fn fuzz_subdomains(
     // Run up to 100 concurrent lookups
     let mut stream = stream::iter(tasks).buffer_unordered(100);
 
+    let total_checks = wordlist.len() * domains.len();
+    let mut checked = 0;
+    let mut last_update = std::time::Instant::now();
+    let update_interval = std::time::Duration::from_secs(5);
+
+    println!("Starting fuzzing: {} total subdomain checks", total_checks);
+
     while let Some(result) = stream.next().await {
+        checked += 1;
+
+        // Print status update every 5 seconds
+        if last_update.elapsed() >= update_interval {
+            let progress_pct = (checked as f64 / total_checks as f64 * 100.0) as u32;
+            println!("Fuzzing progress: {}/{} checked ({}%), {} matches found", 
+                     checked, total_checks, progress_pct, valid_subdomains.len());
+            last_update = std::time::Instant::now();
+        }
+
         if let Some((subdomain, ips)) = result {
             // Check if any of the resolved IPs match our target IPs/Networks
             let mut matched_ips = Vec::new();
@@ -92,6 +109,9 @@ pub async fn fuzz_subdomains(
             }
         }
     }
+
+    println!("Fuzzing complete: {}/{} checked, {} matches found", 
+             checked, total_checks, valid_subdomains.len());
 
     // Write found subdomains to file
     if !valid_subdomains.is_empty() {
