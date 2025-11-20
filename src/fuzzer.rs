@@ -17,7 +17,12 @@ pub async fn fuzz_subdomains(
     targets: &[Target],
     wordlist_path: &str,
     output_dir: &str,
+    verbose: bool,
 ) -> Result<Vec<String>> {
+    if verbose {
+        eprintln!("[VERBOSE] Initializing subdomain fuzzer");
+    }
+
     let resolver = TokioAsyncResolver::tokio(ResolverConfig::google(), ResolverOpts::default());
     let resolver = Arc::new(resolver);
 
@@ -31,12 +36,21 @@ pub async fn fuzz_subdomains(
         .collect();
 
     if domains.is_empty() {
+        if verbose {
+            eprintln!("[VERBOSE] No domains to fuzz, skipping");
+        }
         return Ok(vec![]);
     }
 
+    if verbose {
+        eprintln!("[VERBOSE] Fuzzing subdomains for: {:?}", domains);
+    }
     println!("Fuzzing subdomains for: {:?}", domains);
 
     let wordlist = utils::read_lines(wordlist_path).context("Failed to read wordlist")?;
+    if verbose {
+        eprintln!("[VERBOSE] Loaded {} words from wordlist", wordlist.len());
+    }
     let mut valid_subdomains: Vec<(String, Vec<IpAddr>)> = Vec::new();
 
     // Create a stream of tasks to resolve subdomains concurrently
@@ -72,11 +86,13 @@ pub async fn fuzz_subdomains(
     while let Some(result) = stream.next().await {
         checked += 1;
 
-        // Print status update every 5 seconds
+        // Print status update every 5 seconds (on same line)
         if last_update.elapsed() >= update_interval {
+            use std::io::{self, Write};
             let progress_pct = (checked as f64 / total_checks as f64 * 100.0) as u32;
-            println!("Fuzzing progress: {}/{} checked ({}%), {} matches found", 
+            print!("\rFuzzing progress: {}/{} checked ({}%), {} matches found   ", 
                      checked, total_checks, progress_pct, valid_subdomains.len());
+            io::stdout().flush().ok();
             last_update = std::time::Instant::now();
         }
 
@@ -104,13 +120,15 @@ pub async fn fuzz_subdomains(
             }
 
             if !matched_ips.is_empty() {
+                // Clear the progress line before printing the match
+                print!("\r{}\r", " ".repeat(80));
                 println!("Found valid subdomain: {} -> {:?}", subdomain, matched_ips);
                 valid_subdomains.push((subdomain, matched_ips));
             }
         }
     }
 
-    println!("Fuzzing complete: {}/{} checked, {} matches found", 
+    println!("\rFuzzing complete: {}/{} checked, {} matches found   ", 
              checked, total_checks, valid_subdomains.len());
 
     // Write found subdomains to file

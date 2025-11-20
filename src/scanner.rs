@@ -14,7 +14,11 @@ use crate::target::Target;
 /// 4. Service & Script Scan (on discovered ports)
 ///
 /// Only the final scan saves output to files.
-pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool) -> Result<()> {
+pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verbose: bool) -> Result<()> {
+    if verbose {
+        eprintln!("[VERBOSE] Starting scan orchestration, dry_run={}", dry_run);
+    }
+
     // Convert targets to string list for Nmap
     let target_strings: Vec<String> = targets.iter().map(|t| match t {
         Target::IP(ip) => ip.to_string(),
@@ -59,6 +63,9 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool) -> R
     }
 
     // 1. Alive Host Discovery
+    if verbose {
+        eprintln!("[VERBOSE] Starting alive host discovery on {} targets", target_strings.len());
+    }
     println!("\n--- Starting Alive Host Discovery (Ping Scan) ---");
     // Use -oG - to output grepable format to stdout for parsing
     let alive_output = run_nmap_scan("Alive Scan", &["-sn", "-oG", "-"], &target_strings, output_dir, None).await?;
@@ -71,11 +78,17 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool) -> R
     println!("Alive hosts: {:?}", alive_hosts);
 
     // 2. TCP Port Scan (All ports)
+    if verbose {
+        eprintln!("[VERBOSE] Starting TCP port scan on {} alive hosts", alive_hosts.len());
+    }
     println!("\n--- Starting TCP Port Scan (All Ports) ---");
     // Use -oG - for parsing
     let tcp_output = run_nmap_scan("TCP Scan", &["-p-", "-oG", "-"], &alive_hosts, output_dir, None).await?;
 
     // 3. UDP Port Scan (Top 1000)
+    if verbose {
+        eprintln!("[VERBOSE] Starting UDP port scan on {} alive hosts", alive_hosts.len());
+    }
     println!("\n--- Starting UDP Port Scan (Top 1000) ---");
     let udp_output = run_nmap_scan("UDP Scan", &["-sU", "--top-ports", "1000", "-oG", "-"], &alive_hosts, output_dir, None).await?;
 
