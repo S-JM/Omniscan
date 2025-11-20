@@ -68,12 +68,17 @@ pub async fn run_scans(targets: &[Target], output_dir: &str) -> Result<()> {
         
         // Construct the full command args manually for this one since we have dynamic ports
         let mut final_args = vec!["-sV", "-sC"];
+        
         // If we have UDP ports, we must add -sU to the final scan to enable UDP scanning
         if !udp_ports.is_empty() {
             final_args.push("-sU");
         }
-        // If we have TCP ports (or just to be safe), we usually imply -sS or -sT, but -sU mixed with TCP defaults to -sS for TCP.
-        // Nmap handles mixed scans fine if -sU is present.
+        
+        // If we have TCP ports, we must specify a TCP scan type (like -sS) if -sU is also present,
+        // otherwise Nmap complains "Your ports include 'T:' but you haven't specified any TCP scan type".
+        if !tcp_ports.is_empty() {
+            final_args.push("-sS");
+        }
         
         final_args.push("-p");
         final_args.push(&combined_ports);
