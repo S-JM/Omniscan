@@ -65,10 +65,26 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
     // 1. Alive Host Discovery
     if verbose {
         eprintln!("[VERBOSE] Starting alive host discovery on {} targets", target_strings.len());
+        eprintln!("[VERBOSE] Using multiple techniques: ICMP echo/timestamp, TCP SYN/ACK, UDP ping");
     }
-    println!("\n--- Starting Alive Host Discovery (Ping Scan) ---");
-    // Use -oG - to output grepable format to stdout for parsing
-    let alive_output = run_nmap_scan("Alive Scan", &["-sn", "-oG", "-"], &target_strings, output_dir, None).await?;
+    println!("\n--- Starting Alive Host Discovery (Multiple Techniques) ---");
+    println!("Using ICMP (echo, timestamp), TCP SYN (21,22,23,25,80,113,443,3389), TCP ACK (80,443), UDP (53,123,161)");
+    
+    // Use multiple techniques to detect hosts that might be blocking ICMP or behind firewalls:
+    // -sn: No port scan (just host discovery)
+    // -PS: TCP SYN ping to common ports (FTP, SSH, Telnet, SMTP, HTTP, Auth, HTTPS, RDP)
+    // -PA: TCP ACK ping to web ports (HTTP, HTTPS)
+    // -PE: ICMP echo request (traditional ping)
+    // -PP: ICMP timestamp request
+    // -PU: UDP ping to common ports (DNS, NTP, SNMP)
+    // -oG -: Output in grepable format to stdout for parsing
+    let alive_output = run_nmap_scan(
+        "Alive Scan", 
+        &["-sn", "-PS21,22,23,25,80,113,443,3389", "-PA80,443", "-PE", "-PP", "-PU53,123,161", "-oG", "-"], 
+        &target_strings, 
+        output_dir, 
+        None
+    ).await?;
     let alive_hosts = parse_alive_hosts(&alive_output)?;
     
     let mut scan_targets = alive_hosts;
