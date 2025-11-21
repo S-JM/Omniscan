@@ -456,7 +456,7 @@ fn parse_alive_hosts(content: &str) -> Result<Vec<String>> {
     Ok(alive)
 }
 
-fn parse_ports_from_gnmap(content: &str) -> Result<Vec<String>> {
+pub fn parse_ports_from_gnmap(content: &str) -> Result<Vec<String>> {
     // Format: Host: 192.168.1.1 ()	Ports: 22/open/tcp//ssh///, 80/open/tcp//http///
     let mut ports = Vec::new();
     for line in content.lines() {
@@ -477,7 +477,7 @@ fn parse_ports_from_gnmap(content: &str) -> Result<Vec<String>> {
 
 /// Parse open TCP ports per host from grepable nmap output
 /// Returns a HashMap mapping each host IP to its list of open ports
-fn parse_ports_per_host_from_gnmap(content: &str) -> Result<std::collections::HashMap<String, Vec<String>>> {
+pub fn parse_ports_per_host_from_gnmap(content: &str) -> Result<std::collections::HashMap<String, Vec<String>>> {
     use std::collections::HashMap;
     let mut host_ports: HashMap<String, Vec<String>> = HashMap::new();
     
