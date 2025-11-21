@@ -132,27 +132,14 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
     println!("{}", "=".repeat(70));
     println!("Scanning all 65535 TCP ports on {} host(s)", scan_targets.len());
     println!("{}", "-".repeat(70));
-    // Use -oG - for parsing
-    let tcp_args = if use_pn {
-        vec!["-Pn", "-p-", "-oG", "-"]
-    } else {
-        vec!["-p-", "-oG", "-"]
-    };
+    // Always use -Pn for port scans since we've already done alive host discovery
+    // OR if user explicitly requested -Pn mode
+    let tcp_args = vec!["-Pn", "-p-", "-oG", "-"];
     let tcp_output = run_nmap_scan("TCP Scan", &tcp_args, &scan_targets, output_dir, None, all_formats).await?;
 
     // 2.5. Evasion Rescans (for hosts with ≤1 TCP port)
     // Parse ports per host to identify low-port hosts
     let tcp_host_ports = parse_ports_per_host_from_gnmap(&tcp_output)?;
-    
-    // DEBUG: Show what was parsed
-    eprintln!("[DEBUG] TCP scan output length: {} bytes", tcp_output.len());
-    if tcp_output.len() > 0 {
-        eprintln!("[DEBUG] First 500 chars of output:\n{}", &tcp_output.chars().take(500).collect::<String>());
-    }
-    eprintln!("[DEBUG] Parsed {} hosts from TCP scan", tcp_host_ports.len());
-    for (host, ports) in &tcp_host_ports {
-        eprintln!("[DEBUG] Host: {} has {} port(s): {:?}", host, ports.len(), ports);
-    }
     
     // Perform evasion rescans if any hosts have ≤1 ports
     let evasion_ports = perform_evasion_rescans(&tcp_host_ports, use_pn, output_dir, all_formats).await?;
@@ -173,11 +160,8 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
     println!("Scanning top 1000 UDP ports + high-value ports on {} host(s)", scan_targets.len());
     println!("High-value ports: 67,68,69,514,520,1434,1900,4500,5353");
     println!("{}", "-".repeat(70));
-    let udp_args = if use_pn {
-        vec!["-Pn", "-sU", "--top-ports", "1000", "-p", "U:67,68,69,514,520,1434,1900,4500,5353", "-oG", "-"]
-    } else {
-        vec!["-sU", "--top-ports", "1000", "-p", "U:67,68,69,514,520,1434,1900,4500,5353", "-oG", "-"]
-    };
+    // Always use -Pn since we've already done alive host discovery
+    let udp_args = vec!["-Pn", "-sU", "--top-ports", "1000", "-p", "U:67,68,69,514,520,1434,1900,4500,5353", "-oG", "-"];
     let udp_output = run_nmap_scan("UDP Scan", &udp_args, &scan_targets, output_dir, None, all_formats).await?;
 
     // 4. Service & Script Scan (Default Scripts + Version)
@@ -216,12 +200,7 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
         println!("{}", "-".repeat(70));
         
         // Construct the full command args manually for this one since we have dynamic ports
-        let mut final_args = vec!["-sV", "-sC", "-O"];
-        
-        // Add -Pn flag if we're in no-ping mode
-        if use_pn {
-            final_args.push("-Pn");
-        }
+        let mut final_args = vec!["-sV", "-sC", "-O", "-Pn"];
         
         // If we have UDP ports, we must add -sU to the final scan to enable UDP scanning
         if !udp_ports.is_empty() {
