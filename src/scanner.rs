@@ -34,8 +34,9 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
     // If dry-run mode, build and print all commands without executing
     if dry_run {
         // 1. Alive Host Discovery
-        let alive_cmd = build_command("nmap", &["-sn", "-oG", "-"], &target_strings, output_dir, None);
-        println!("# Alive Host Discovery (Ping Scan)");
+        let alive_cmd = build_command("nmap", &["-sn", "-PS21,22,23,25,80,113,443,3389", "-PA80,443", "-PE", "-PP", "-PU53,123,161", "-oG", "-"], &target_strings, output_dir, None);
+        println!("# Alive Host Discovery (Multiple Techniques)");
+        println!("# Using ICMP (echo, timestamp), TCP SYN/ACK, UDP ping");
         println!("{}\n", alive_cmd);
         
         // 2. TCP Port Scan
