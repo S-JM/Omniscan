@@ -140,6 +140,19 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
     };
     let tcp_output = run_nmap_scan("TCP Scan", &tcp_args, &scan_targets, output_dir, None, all_formats).await?;
 
+    // 2.5. Evasion Rescans (for hosts with ≤1 TCP port)
+    // Parse ports per host to identify low-port hosts
+    let tcp_host_ports = parse_ports_per_host_from_gnmap(&tcp_output)?;
+    
+    // Perform evasion rescans if any hosts have ≤1 ports
+    let evasion_ports = perform_evasion_rescans(&tcp_host_ports, use_pn, output_dir, all_formats).await?;
+    
+    // Merge evasion-discovered ports into tcp_host_ports for final scan
+    let mut combined_tcp_host_ports = tcp_host_ports.clone();
+    for (host, new_ports) in evasion_ports {
+        combined_tcp_host_ports.entry(host).or_insert_with(Vec::new).extend(new_ports);
+    }
+
     // 3. UDP Port Scan (Top 1000)
     if verbose {
         eprintln!("[VERBOSE] Starting UDP port scan on {} hosts", scan_targets.len());
@@ -158,7 +171,16 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
     let udp_output = run_nmap_scan("UDP Scan", &udp_args, &scan_targets, output_dir, None, all_formats).await?;
 
     // 4. Service & Script Scan (Default Scripts + Version)
-    let tcp_ports = parse_ports_from_gnmap(&tcp_output)?;
+    // Collect all TCP ports from combined_tcp_host_ports (includes evasion discoveries)
+    let mut tcp_ports: Vec<String> = Vec::new();
+    for ports in combined_tcp_host_ports.values() {
+        for port in ports {
+            if !tcp_ports.contains(port) {
+                tcp_ports.push(port.clone());
+            }
+        }
+    }
+    
     let udp_ports = parse_ports_from_gnmap(&udp_output)?;
     
     let mut combined_ports = String::new();
@@ -224,6 +246,113 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
     println!("{}", "=".repeat(70));
     
     Ok(())
+}
+
+/// Perform evasion rescans on hosts with 1 or fewer TCP ports
+/// Interactive prompts for each technique: fragmented, source port 53/88, badsum, data-length
+async fn perform_evasion_rescans(
+    host_ports: &std::collections::HashMap<String, Vec<String>>,
+    use_pn: bool,
+    output_dir: &str,
+    all_formats: bool,
+) -> Result<std::collections::HashMap<String, Vec<String>>> {
+    use std::collections::HashMap;
+    use std::io::{self, Write};
+    
+    let mut additional_ports: HashMap<String, Vec<String>> = HashMap::new();
+    
+    // Evasion techniques to try
+    let techniques = vec![
+        ("Fragmented packets", vec!["-f"]),
+        ("Source port 53 (DNS)", vec!["--source-port", "53"]),
+        ("Source port 88 (Kerberos)", vec!["--source-port", "88"]),
+        ("Bad checksum", vec!["--badsum"]),
+        ("Data length padding", vec!["--data-length", "25"]),
+    ];
+    
+    // Find hosts with 1 or fewer TCP ports
+    let low_port_hosts: Vec<_> = host_ports
+        .iter()
+        .filter(|(_, ports)| ports.len() <= 1)
+        .map(|(host, _)| host.clone())
+        .collect();
+    
+    if low_port_hosts.is_empty() {
+        return Ok(additional_ports);
+    }
+    
+    println!("\n{}", "=".repeat(70));
+    println!("  FIREWALL EVASION RESCANS");
+    println!("{}", "=".repeat(70));
+    println!("Found {} host(s) with ≤1 TCP port", low_port_hosts.len());
+    println!("Hosts: {:?}", low_port_hosts);
+    println!("{}", "-".repeat(70));
+    
+    for host in &low_port_hosts {
+        let current_ports = host_ports.get(host).map(|p| p.len()).unwrap_or(0);
+        println!("\nHost {} has {} TCP port(s) open", host, current_ports);
+        
+        let mut skip_all = false;
+        
+        for (name, flags) in &techniques {
+            if skip_all {
+                break;
+            }
+            
+            print!("Try evasion technique: {}? [y/n/skip all]: ", name);
+            io::stdout().flush()?;
+            
+            let mut response = String::new();
+            io::stdin().read_line(&mut response)?;
+            let response = response.trim().to_lowercase();
+            
+            if response == "skip all" || response == "a" {
+                skip_all = true;
+                println!("Skipping all remaining evasion techniques for all hosts.");
+                break;
+            }
+            
+            if response != "y" && response != "yes" {
+                println!("Skipping {}.", name);
+                continue;
+            }
+            
+            // Build scan args with evasion flag
+            let mut scan_args = flags.clone();
+            if use_pn {
+                scan_args.insert(0, "-Pn");
+            }
+            scan_args.extend_from_slice(&["-p-", "-oG", "-"]);
+            
+            println!("Running TCP scan with {} on {}...", name, host);
+            let output = run_nmap_scan(
+                &format!("Evasion Scan ({})", name),
+                &scan_args.iter().map(|s| s.as_ref()).collect::<Vec<&str>>(),
+                &vec![host.clone()],
+                output_dir,
+                None,
+                all_formats,
+            ).await?;
+            
+            // Parse discovered ports
+            let host_port_map = parse_ports_per_host_from_gnmap(&output)?;
+            if let Some(new_ports) = host_port_map.get(host) {
+                if !new_ports.is_empty() {
+                    println!("✓ Found {} new port(s) with {}: {:?}", new_ports.len(), name, new_ports);
+                    additional_ports.insert(host.clone(), new_ports.clone());
+                    break; // Found ports, move to next host
+                } else {
+                    println!("No new ports found with {}.", name);
+                }
+            }
+        }
+        
+        if skip_all {
+            break;
+        }
+    }
+    
+    Ok(additional_ports)
 }
 
 async fn run_nmap_scan(
@@ -346,6 +475,39 @@ fn parse_ports_from_gnmap(content: &str) -> Result<Vec<String>> {
         }
     }
     Ok(ports)
+}
+
+/// Parse open TCP ports per host from grepable nmap output
+/// Returns a HashMap mapping each host IP to its list of open ports
+fn parse_ports_per_host_from_gnmap(content: &str) -> Result<std::collections::HashMap<String, Vec<String>>> {
+    use std::collections::HashMap;
+    let mut host_ports: HashMap<String, Vec<String>> = HashMap::new();
+    
+    for line in content.lines() {
+        // Extract host IP
+        if let Some(host_part) = line.split("Host: ").nth(1) {
+            if let Some(ip) = host_part.split_whitespace().next() {
+                let host_ip = ip.to_string();
+                
+                // Extract ports if present
+                if let Some(ports_part) = line.split("Ports: ").nth(1) {
+                    let mut ports = Vec::new();
+                    for port_entry in ports_part.split(", ") {
+                        if port_entry.contains("/open/") {
+                            if let Some(port) = port_entry.split('/').next() {
+                                ports.push(port.to_string());
+                            }
+                        }
+                    }
+                    host_ports.insert(host_ip, ports);
+                } else {
+                    // Host exists but no ports section (0 ports)
+                    host_ports.entry(host_ip).or_insert_with(Vec::new);
+                }
+            }
+        }
+    }
+    Ok(host_ports)
 }
 
 fn build_command(
