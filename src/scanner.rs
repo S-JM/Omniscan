@@ -179,11 +179,11 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
         println!("\n{}", "=".repeat(70));
         println!("  SERVICE & SCRIPT SCAN");
         println!("{}", "=".repeat(70));
-        println!("Running version detection and default scripts on discovered ports");
+        println!("Running version detection, OS detection, and default scripts on discovered ports");
         println!("{}", "-".repeat(70));
         
         // Construct the full command args manually for this one since we have dynamic ports
-        let mut final_args = vec!["-sV", "-sC"];
+        let mut final_args = vec!["-sV", "-sC", "-O"];
         
         // Add -Pn flag if we're in no-ping mode
         if use_pn {
