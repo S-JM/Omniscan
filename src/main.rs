@@ -31,6 +31,10 @@ struct Args {
     /// Verbose mode: print debug messages
     #[arg(short, long)]
     verbose: bool,
+
+    /// Output all formats (XML, normal, grepable) instead of just XML
+    #[arg(long)]
+    all_formats: bool,
 }
 
 #[tokio::main]
@@ -145,7 +149,7 @@ async fn main() -> Result<()> {
     }
     
     // Show scan preview by calling run_scans in dry-run mode
-    scanner::run_scans(&scan_targets, &args.output_dir, true, args.verbose).await?;
+    scanner::run_scans(&scan_targets, &args.output_dir, true, args.verbose, args.all_formats).await?;
     
     // If --dry-run flag is set, exit here
     if args.dry_run {
@@ -184,7 +188,7 @@ async fn main() -> Result<()> {
     }
     
     // Pass scan targets (filtered IPs only) to scanner for actual execution
-    scanner::run_scans(&scan_targets, &args.output_dir, false, args.verbose).await?;
+    scanner::run_scans(&scan_targets, &args.output_dir, false, args.verbose, args.all_formats).await?;
     
     Ok(())
 }

@@ -14,9 +14,10 @@ use crate::target::Target;
 /// 4. Service & Script Scan (on discovered ports)
 ///
 /// Only the final scan saves output to files.
-pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verbose: bool) -> Result<()> {
+pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verbose: bool, all_formats: bool) -> Result<()> {
     if verbose {
         eprintln!("[VERBOSE] Starting scan orchestration, dry_run={}", dry_run);
+        eprintln!("[VERBOSE] Output format: {}", if all_formats { "all formats (-oA)" } else { "XML only (-oX)" });
     }
 
     // Convert targets to string list for Nmap
@@ -84,7 +85,8 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
         &["-sn", "-PS21,22,23,25,80,113,443,3389", "-PA80,443", "-PE", "-PP", "-PU53,123,161", "-oG", "-"], 
         &target_strings, 
         output_dir, 
-        None
+        None,
+        all_formats
     ).await?;
     let alive_hosts = parse_alive_hosts(&alive_output)?;
     
@@ -126,7 +128,7 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
     } else {
         vec!["-p-", "-oG", "-"]
     };
-    let tcp_output = run_nmap_scan("TCP Scan", &tcp_args, &scan_targets, output_dir, None).await?;
+    let tcp_output = run_nmap_scan("TCP Scan", &tcp_args, &scan_targets, output_dir, None, all_formats).await?;
 
     // 3. UDP Port Scan (Top 1000)
     if verbose {
@@ -138,7 +140,7 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
     } else {
         vec!["-sU", "--top-ports", "1000", "-oG", "-"]
     };
-    let udp_output = run_nmap_scan("UDP Scan", &udp_args, &scan_targets, output_dir, None).await?;
+    let udp_output = run_nmap_scan("UDP Scan", &udp_args, &scan_targets, output_dir, None, all_formats).await?;
 
     // 4. Service & Script Scan (Default Scripts + Version)
     let tcp_ports = parse_ports_from_gnmap(&tcp_output)?;
@@ -189,7 +191,7 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
         for host in scan_targets {
             println!("Scanning host: {}", host);
             let single_target = vec![host.clone()];
-            run_nmap_scan("Script Scan", &final_args, &single_target, output_dir, Some(&host)).await?;
+            run_nmap_scan("Script Scan", &final_args, &single_target, output_dir, Some(&host), all_formats).await?;
         }
     } else {
         println!("Skipping script scan as no ports were found.");
@@ -204,13 +206,21 @@ async fn run_nmap_scan(
     targets: &[String],
     output_dir: &str,
     output_name: Option<&str>,
+    all_formats: bool,
 ) -> Result<String> {
     let mut cmd = Command::new("nmap");
     cmd.args(nmap_args);
     
     if let Some(out_name) = output_name {
         let output_file_base = format!("{}/{}", output_dir, out_name);
-        cmd.arg("-oA").arg(&output_file_base);
+        if all_formats {
+            // Output all formats: XML, normal text, and grepable
+            cmd.arg("-oA").arg(&output_file_base);
+        } else {
+            // Output XML only (default)
+            let xml_file = format!("{}.xml", output_file_base);
+            cmd.arg("-oX").arg(&xml_file);
+        }
     }
 
     cmd.args(targets)
