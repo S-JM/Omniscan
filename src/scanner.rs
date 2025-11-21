@@ -147,12 +147,13 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
     println!("\n{}", "=".repeat(70));
     println!("  UDP PORT SCAN");
     println!("{}", "=".repeat(70));
-    println!("Scanning top 1000 UDP ports on {} host(s)", scan_targets.len());
+    println!("Scanning top 1000 UDP ports + high-value ports on {} host(s)", scan_targets.len());
+    println!("High-value ports: 67,68,69,514,520,1434,1900,4500,5353");
     println!("{}", "-".repeat(70));
     let udp_args = if use_pn {
-        vec!["-Pn", "-sU", "--top-ports", "1000", "-oG", "-"]
+        vec!["-Pn", "-sU", "--top-ports", "1000", "-p", "U:67,68,69,514,520,1434,1900,4500,5353", "-oG", "-"]
     } else {
-        vec!["-sU", "--top-ports", "1000", "-oG", "-"]
+        vec!["-sU", "--top-ports", "1000", "-p", "U:67,68,69,514,520,1434,1900,4500,5353", "-oG", "-"]
     };
     let udp_output = run_nmap_scan("UDP Scan", &udp_args, &scan_targets, output_dir, None, all_formats).await?;
 
