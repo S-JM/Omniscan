@@ -69,8 +69,12 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
         eprintln!("[VERBOSE] Starting alive host discovery on {} targets", target_strings.len());
         eprintln!("[VERBOSE] Using multiple techniques: ICMP echo/timestamp, TCP SYN/ACK, UDP ping");
     }
-    println!("\n--- Starting Alive Host Discovery (Multiple Techniques) ---");
-    println!("Using ICMP (echo, timestamp), TCP SYN (21,22,23,25,80,113,443,3389), TCP ACK (80,443), UDP (53,123,161)");
+    println!("\n{}", "=".repeat(70));
+    println!("  ALIVE HOST DISCOVERY");
+    println!("{}", "=".repeat(70));
+    println!("Techniques: ICMP (echo, timestamp), TCP SYN/ACK, UDP ping");
+    println!("Ports: TCP 21,22,23,25,80,113,443,3389 | UDP 53,123,161");
+    println!("{}", "-".repeat(70));
     
     // Use multiple techniques to detect hosts that might be blocking ICMP or behind firewalls:
     // -sn: No port scan (just host discovery)
@@ -114,14 +118,20 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
             return Ok(());
         }
     } else {
-        println!("Alive hosts: {:?}", scan_targets);
+        println!("{}", "-".repeat(70));
+        println!("✓ Found {} alive host(s): {:?}", scan_targets.len(), scan_targets);
+        println!("{}", "=".repeat(70));
     }
 
     // 2. TCP Port Scan (All ports)
     if verbose {
         eprintln!("[VERBOSE] Starting TCP port scan on {} hosts", scan_targets.len());
     }
-    println!("\n--- Starting TCP Port Scan (All Ports) ---");
+    println!("\n{}", "=".repeat(70));
+    println!("  TCP PORT SCAN");
+    println!("{}", "=".repeat(70));
+    println!("Scanning all 65535 TCP ports on {} host(s)", scan_targets.len());
+    println!("{}", "-".repeat(70));
     // Use -oG - for parsing
     let tcp_args = if use_pn {
         vec!["-Pn", "-p-", "-oG", "-"]
@@ -134,7 +144,11 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
     if verbose {
         eprintln!("[VERBOSE] Starting UDP port scan on {} hosts", scan_targets.len());
     }
-    println!("\n--- Starting UDP Port Scan (Top 1000) ---");
+    println!("\n{}", "=".repeat(70));
+    println!("  UDP PORT SCAN");
+    println!("{}", "=".repeat(70));
+    println!("Scanning top 1000 UDP ports on {} host(s)", scan_targets.len());
+    println!("{}", "-".repeat(70));
     let udp_args = if use_pn {
         vec!["-Pn", "-sU", "--top-ports", "1000", "-oG", "-"]
     } else {
@@ -162,7 +176,11 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
     }
 
     if !combined_ports.is_empty() {
-        println!("\n--- Starting Service & Script Scan ---");
+        println!("\n{}", "=".repeat(70));
+        println!("  SERVICE & SCRIPT SCAN");
+        println!("{}", "=".repeat(70));
+        println!("Running version detection and default scripts on discovered ports");
+        println!("{}", "-".repeat(70));
         
         // Construct the full command args manually for this one since we have dynamic ports
         let mut final_args = vec!["-sV", "-sC"];
@@ -194,9 +212,16 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
             run_nmap_scan("Script Scan", &final_args, &single_target, output_dir, Some(&host), all_formats).await?;
         }
     } else {
-        println!("Skipping script scan as no ports were found.");
+        println!("\n{}", "=".repeat(70));
+        println!("  SERVICE & SCRIPT SCAN - SKIPPED");
+        println!("{}", "=".repeat(70));
+        println!("No open ports were found, skipping service detection.");
     }
 
+    println!("\n{}", "=".repeat(70));
+    println!("  SCAN COMPLETE");
+    println!("{}", "=".repeat(70));
+    
     Ok(())
 }
 

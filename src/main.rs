@@ -127,9 +127,9 @@ async fn main() -> Result<()> {
 
 
     // Always show a preview of what will be done
-    println!("\n{}", "=".repeat(60));
-    println!("PREVIEW: Commands that will be executed");
-    println!("{}", "=".repeat(60));
+    println!("\n{}", "=".repeat(70));
+    println!("  PREVIEW: Commands that will be executed");
+    println!("{}", "=".repeat(70));
     
     // Show fuzzing preview if applicable
     if args.wordlist.is_some() {
@@ -157,7 +157,7 @@ async fn main() -> Result<()> {
     }
     
     // Ask user for confirmation
-    println!("\n{}", "=".repeat(60));
+    println!("\n{}", "=".repeat(70));
     print!("Do you want to proceed with execution? [y/N]: ");
     use std::io::{self, Write};
     io::stdout().flush()?;
@@ -171,13 +171,15 @@ async fn main() -> Result<()> {
         return Ok(());
     }
     
-    println!("\n{}", "=".repeat(60));
-    println!("EXECUTION STARTED");
-    println!("{}", "=".repeat(60));
+    println!("\n{}", "=".repeat(70));
+    println!("  EXECUTION STARTED");
+    println!("{}", "=".repeat(70));
     
     // Run actual fuzzing if wordlist provided
     if let Some(wordlist) = &args.wordlist {
-        println!("\n--- Starting Subdomain Fuzzing ---");
+        println!("\n{}", "=".repeat(70));
+        println!("  SUBDOMAIN FUZZING");
+        println!("{}", "=".repeat(70));
         let found_subdomains = fuzzer::fuzz_subdomains(&targets, wordlist, &args.output_dir, args.verbose).await?;
         if !found_subdomains.is_empty() {
             println!("Found {} valid subdomains:", found_subdomains.len());
