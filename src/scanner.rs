@@ -144,6 +144,16 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
     // Parse ports per host to identify low-port hosts
     let tcp_host_ports = parse_ports_per_host_from_gnmap(&tcp_output)?;
     
+    // DEBUG: Show what was parsed
+    eprintln!("[DEBUG] TCP scan output length: {} bytes", tcp_output.len());
+    if tcp_output.len() > 0 {
+        eprintln!("[DEBUG] First 500 chars of output:\n{}", &tcp_output.chars().take(500).collect::<String>());
+    }
+    eprintln!("[DEBUG] Parsed {} hosts from TCP scan", tcp_host_ports.len());
+    for (host, ports) in &tcp_host_ports {
+        eprintln!("[DEBUG] Host: {} has {} port(s): {:?}", host, ports.len(), ports);
+    }
+    
     // Perform evasion rescans if any hosts have ≤1 ports
     let evasion_ports = perform_evasion_rescans(&tcp_host_ports, use_pn, output_dir, all_formats).await?;
     
