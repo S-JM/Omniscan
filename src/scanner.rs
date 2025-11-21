@@ -281,7 +281,7 @@ async fn perform_evasion_rescans(
 
     for host in &low_port_hosts {
         let current_ports = host_ports.get(host).map(|p| p.len()).unwrap_or(0);
-        println!("\nHost {} has {} TCP port(s) open", host, current_ports);
+        println!("\n[Host: {} ({} open ports)]", host, current_ports);
         
         let mut skip_all = false;
         
@@ -320,7 +320,9 @@ async fn perform_evasion_rescans(
             }
             scan_args.extend_from_slice(&["-p-", "-oG", "-"]);
             
-            println!("Running TCP scan with {} on {}...", name, host);
+            println!("{}", "-".repeat(70));
+            println!("Scanning host {} with evasion technique: {}", host, name);
+            println!("{}", "-".repeat(70));
             let output = run_nmap_scan(
                 &format!("Evasion Scan ({})", name),
                 &scan_args.iter().map(|s| s.as_ref()).collect::<Vec<&str>>(),
