@@ -277,6 +277,8 @@ async fn perform_evasion_rescans(
     println!("Hosts: {:?}", low_port_hosts);
     println!("{}", "-".repeat(70));
     
+    let mut yes_to_all = false;
+
     for host in &low_port_hosts {
         let current_ports = host_ports.get(host).map(|p| p.len()).unwrap_or(0);
         println!("\nHost {} has {} TCP port(s) open", host, current_ports);
@@ -288,22 +290,27 @@ async fn perform_evasion_rescans(
                 break;
             }
             
-            print!("Try evasion technique: {}? [y/n/skip all]: ", name);
-            io::stdout().flush()?;
-            
-            let mut response = String::new();
-            io::stdin().read_line(&mut response)?;
-            let response = response.trim().to_lowercase();
-            
-            if response == "skip all" || response == "a" {
-                skip_all = true;
-                println!("Skipping all remaining evasion techniques for all hosts.");
-                break;
-            }
-            
-            if response != "y" && response != "yes" {
-                println!("Skipping {}.", name);
-                continue;
+            if !yes_to_all {
+                print!("Try evasion technique: {}? [y/n/all/skip all]: ", name);
+                io::stdout().flush()?;
+                
+                let mut response = String::new();
+                io::stdin().read_line(&mut response)?;
+                let response = response.trim().to_lowercase();
+                
+                if response == "skip all" || response == "a" {
+                    skip_all = true;
+                    println!("Skipping all remaining evasion techniques for all hosts.");
+                    break;
+                }
+                
+                if response == "all" || response == "yes to all" {
+                    yes_to_all = true;
+                    println!("Enabling all remaining evasion techniques for all hosts.");
+                } else if response != "y" && response != "yes" {
+                    println!("Skipping {}.", name);
+                    continue;
+                }
             }
             
             // Build scan args with evasion flag
