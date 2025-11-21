@@ -14,7 +14,9 @@ use crate::target::Target;
 /// 4. Service & Script Scan (on discovered ports)
 ///
 /// Only the final scan saves output to files.
-pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verbose: bool, all_formats: bool) -> Result<()> {
+///
+/// Returns a vector of (IP, port) tuples representing discovered SSL/TLS services.
+pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verbose: bool, all_formats: bool, _testssl: bool) -> Result<Vec<(String, u16)>> {
     if verbose {
         eprintln!("[VERBOSE] Starting scan orchestration, dry_run={}", dry_run);
         eprintln!("[VERBOSE] Output format: {}", if all_formats { "all formats (-oA)" } else { "XML only (-oX)" });
@@ -29,7 +31,7 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
 
     if target_strings.is_empty() {
         println!("No targets to scan.");
-        return Ok(());
+        return Ok(Vec::new());
     }
 
     // If dry-run mode, build and print all commands without executing
@@ -56,7 +58,7 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
         let script_cmd = build_command("nmap", &["-sV", "-sC", "-sS", "-sU", "-p", "T:80,443,U:53,123"], &["<HOST>"], output_dir, Some("<HOST>"));
         println!("{}\n", script_cmd);
         
-        return Ok(());
+        return Ok(Vec::new());
     }
 
     // Ensure output directory exists
@@ -115,7 +117,7 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
             use_pn = true;
         } else {
             println!("Exiting.");
-            return Ok(());
+            return Ok(Vec::new());
         }
     } else {
         println!("{}", "-".repeat(70));
@@ -234,7 +236,8 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
     println!("  SCAN COMPLETE");
     println!("{}", "=".repeat(70));
     
-    Ok(())
+    // Return empty vec for now - SSL port detection will be done in main.rs
+    Ok(Vec::new())
 }
 
 /// Perform evasion rescans on hosts with 1 or fewer TCP ports

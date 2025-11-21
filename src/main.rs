@@ -35,6 +35,10 @@ struct Args {
     /// Output all formats (XML, normal, grepable) instead of just XML
     #[arg(long)]
     all_formats: bool,
+
+    /// Run testssl.sh on discovered SSL/TLS services
+    #[arg(long)]
+    testssl: bool,
 }
 
 #[tokio::main]
@@ -149,7 +153,7 @@ async fn main() -> Result<()> {
     }
     
     // Show scan preview by calling run_scans in dry-run mode
-    scanner::run_scans(&scan_targets, &args.output_dir, true, args.verbose, args.all_formats).await?;
+    scanner::run_scans(&scan_targets, &args.output_dir, true, args.verbose, args.all_formats, args.testssl).await?;
     
     // If --dry-run flag is set, exit here
     if args.dry_run {
@@ -189,8 +193,24 @@ async fn main() -> Result<()> {
         }
     }
     
+    
     // Pass scan targets (filtered IPs only) to scanner for actual execution
-    scanner::run_scans(&scan_targets, &args.output_dir, false, args.verbose, args.all_formats).await?;
+    let ssl_info = scanner::run_scans(&scan_targets, &args.output_dir, false, args.verbose, args.all_formats, args.testssl).await?;
+    
+    // Run testssl.sh if enabled
+    if args.testssl {
+        // Collect domain targets from original input
+        let domain_targets: Vec<String> = targets
+            .iter()
+            .filter_map(|t| match t {
+                target::Target::Domain(d) => Some(d.clone()),
+                _ => None,
+            })
+            .collect();
+        
+        // ssl_info contains (ip, port) pairs for discovered SSL services
+        nmap_helper::ssl_scanner::run_testssl_scans(&domain_targets, &ssl_info, &args.output_dir).await?;
+    }
     
     Ok(())
 }
