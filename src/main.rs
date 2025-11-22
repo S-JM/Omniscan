@@ -5,6 +5,7 @@ use nmap_helper::scanner;
 use nmap_helper::fuzzer;
 use nmap_helper::utils;
 use nmap_helper::zone_transfer;
+use nmap_helper::email_verification;
 use colored::*;
 
 #[derive(Parser, Debug)]
@@ -58,6 +59,10 @@ struct Args {
     /// Run ONLY DNS zone transfer on all provided domains (skips Nmap, fuzzing, TestSSL).
     #[arg(long)]
     zone_transfer_only: bool,
+
+    /// Run ONLY email DNS verification on all provided domains (skips Nmap, fuzzing, TestSSL, zone transfer).
+    #[arg(long)]
+    email_verification_only: bool,
 }
 
 #[tokio::main]
@@ -191,9 +196,32 @@ async fn main() -> Result<()> {
         println!("Domains: {:?}", domain_targets);
     }
     
+    // Show email verification preview if applicable
+    if !domain_targets.is_empty() {
+        println!("\n{}", "# Email DNS Verification".blue().bold());
+        if args.email_verification_only {
+            println!("Will verify email DNS records for {} domain(s) (--email-verification-only)", domain_targets.len());
+        } else {
+            println!("Will verify email DNS records for {} domain(s)", domain_targets.len());
+        }
+        println!("Checks: SPF, DMARC, DKIM");
+    }
+    
     // Show scan preview by calling run_scans in dry-run mode
-    if !args.testssl_only && !args.zone_transfer_only {
+    if !args.testssl_only && !args.zone_transfer_only && !args.email_verification_only {
         scanner::run_scans(&scan_targets, &args.output_dir, true, args.verbose, args.all_formats, args.testssl, args.yes_all).await?;
+    } else if args.email_verification_only {
+        println!("\n{}", "# Nmap Scans".blue().bold());
+        println!("{}", "Skipped (--email-verification-only)".yellow());
+        
+        println!("\n{}", "# Subdomain Fuzzing".blue().bold());
+        println!("{}", "Skipped (--email-verification-only)".yellow());
+        
+        println!("\n{}", "# DNS Zone Transfer".blue().bold());
+        println!("{}", "Skipped (--email-verification-only)".yellow());
+        
+        println!("\n{}", "# TestSSL.sh Scan".blue().bold());
+        println!("{}", "Skipped (--email-verification-only)".yellow());
     } else if args.zone_transfer_only {
         println!("\n{}", "# Nmap Scans".blue().bold());
         println!("{}", "Skipped (--zone-transfer-only)".yellow());
@@ -271,6 +299,18 @@ async fn main() -> Result<()> {
     
     // If --zone-transfer-only, exit here
     if args.zone_transfer_only {
+        return Ok(());
+    }
+    
+    // Run email verification if we have domains (unless skipped)
+    if !domain_targets.is_empty() && !args.testssl_only {
+        if let Err(e) = email_verification::run_email_verification(&domain_targets, &args.output_dir, args.verbose).await {
+            eprintln!("Email verification error: {}", e);
+        }
+    }
+    
+    // If --email-verification-only, exit here
+    if args.email_verification_only {
         return Ok(());
     }
     
