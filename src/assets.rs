@@ -58,6 +58,15 @@ pub fn extract_assets() -> Result<(TempDir, PathBuf, PathBuf, PathBuf)> {
         perms.set_mode(0o755);
         fs::set_permissions(&openssl_path, perms)?;
     }
+
+    // Fallback/Double-check: Try to set executable permissions using chmod
+    // This helps if the binary was compiled on Windows but run on Linux (e.g. via some compat layer)
+    // or if #[cfg(unix)] didn't trigger for some reason.
+    let _ = std::process::Command::new("chmod")
+        .arg("+x")
+        .arg(&testssl_script)
+        .arg(&openssl_path)
+        .output();
     
     Ok((temp_dir, testssl_dir, testssl_script, openssl_path))
 }
