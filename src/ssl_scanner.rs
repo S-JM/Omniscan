@@ -5,6 +5,7 @@ use std::process::Stdio;
 use tokio::process::Command;
 use indicatif::{ProgressBar, ProgressStyle};
 use crate::assets;
+use colored::*;
 
 /// Run testssl.sh against a target (domain or IP)
 /// 
@@ -44,6 +45,7 @@ pub async fn run_testssl(
             .output() 
         {
             Ok(output) if output.status.success() => {
+                println!("{} {}", "✓ Bundled OpenSSL is functional:".green(), String::from_utf8_lossy(&output.stdout).trim());
                 true
             },
             Ok(output) => {
@@ -98,9 +100,9 @@ pub async fn run_testssl(
     pb.finish_with_message(format!("Completed SSL/TLS scan on {}", target));
     
     if output.status.success() {
-        println!("✓ Results saved to: {}", output_file);
+        println!("{} {}", "✓ Results saved to:".green(), output_file);
     } else {
-        eprintln!("testssl.sh failed with status: {}", output.status);
+        eprintln!("{} {}", "testssl.sh failed with status:".red(), output.status);
         eprintln!("Stderr: {}", String::from_utf8_lossy(&output.stderr));
     }
     
@@ -120,9 +122,9 @@ pub async fn run_testssl_scans(
     output_dir: &str,
     verbose: bool,
 ) -> Result<()> {
-    println!("\n{}", "=".repeat(70));
-    println!("  SSL/TLS SECURITY SCAN (testssl.sh)");
-    println!("{}", "=".repeat(70));
+    println!("\n{}", "=".repeat(70).blue().bold());
+    println!("{}", "  SSL/TLS SECURITY SCAN (testssl.sh)".blue().bold());
+    println!("{}", "=".repeat(70).blue().bold());
     
     // Extract assets - now returns (temp_dir, testssl_dir, script_path, openssl_path)
     let (temp_dir, _testssl_dir, testssl_path, openssl_path) = assets::extract_assets()
@@ -139,7 +141,7 @@ pub async fn run_testssl_scans(
         println!("\nScanning {} domain(s):", domains.len());
         for domain in domains {
             if let Err(e) = run_testssl(domain, None, output_dir, &testssl_path, &openssl_path, verbose).await {
-                eprintln!("Failed to scan {}: {}", domain, e);
+                eprintln!("{} {}: {}", "Failed to scan".red(), domain, e);
             }
         }
     }
@@ -149,7 +151,7 @@ pub async fn run_testssl_scans(
         println!("\nScanning {} IP:port pair(s) with SSL/TLS:", ip_ssl_ports.len());
         for (ip, port) in ip_ssl_ports {
             if let Err(e) = run_testssl(ip, Some(*port), output_dir, &testssl_path, &openssl_path, verbose).await {
-                eprintln!("Failed to scan {}:{}: {}", ip, port, e);
+                eprintln!("{} {}:{}: {}", "Failed to scan".red(), ip, port, e);
             }
         }
     }
@@ -157,9 +159,9 @@ pub async fn run_testssl_scans(
     // Keep temp_dir alive until scans complete
     drop(temp_dir);
     
-    println!("{}", "=".repeat(70));
-    println!("  SSL/TLS SCAN COMPLETE");
-    println!("{}", "=".repeat(70));
+    println!("{}", "=".repeat(70).green().bold());
+    println!("{}", "  SSL/TLS SCAN COMPLETE".green().bold());
+    println!("{}", "=".repeat(70).green().bold());
     
     Ok(())
 }

@@ -8,6 +8,7 @@ use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
 use crate::target::Target;
 use crate::utils;
 use tokio_util::sync::CancellationToken;
+use colored::*;
 
 /// Performs subdomain fuzzing on Domain targets.
 ///
@@ -47,7 +48,7 @@ pub async fn fuzz_subdomains(
     if verbose {
         eprintln!("[VERBOSE] Fuzzing subdomains for: {:?}", domains);
     }
-    println!("Fuzzing subdomains for: {:?}", domains);
+    println!("{} {:?}", "Fuzzing subdomains for:".blue(), domains);
 
     let wordlist = utils::read_lines(wordlist_path).context("Failed to read wordlist")?;
     if verbose {
@@ -89,12 +90,12 @@ pub async fn fuzz_subdomains(
     if verbose {
         eprintln!("[VERBOSE] Starting DNS lookups with concurrency=20 and 10ms delay per request");
     }
-    println!("Starting fuzzing: {} total subdomain checks", total_checks);
+    println!("{} {} total subdomain checks", "Starting fuzzing:".blue(), total_checks);
 
     while let Some(result) = stream.next().await {
         // Check for cancellation
         if cancel_token.is_cancelled() {
-            println!("\n\nFuzzing cancelled. Returning partial results...");
+            println!("\n\n{}", "Fuzzing cancelled. Returning partial results...".red());
             break;
         }
         
@@ -136,14 +137,14 @@ pub async fn fuzz_subdomains(
             if !matched_ips.is_empty() {
                 // Clear the progress line before printing the match
                 print!("\r{}\r", " ".repeat(80));
-                println!("Found valid subdomain: {} -> {:?}", subdomain, matched_ips);
+                println!("{} {} -> {:?}", "✓ Found valid subdomain:".green(), subdomain, matched_ips);
                 valid_subdomains.push((subdomain, matched_ips));
             }
         }
     }
 
-    println!("\rFuzzing complete: {}/{} checked, {} matches found   ", 
-             checked, total_checks, valid_subdomains.len());
+    println!("\r{} {}/{} checked, {} matches found   ", 
+             "Fuzzing complete:".green(), checked, total_checks, valid_subdomains.len());
 
     // Write found subdomains to file
     if !valid_subdomains.is_empty() {
@@ -167,7 +168,7 @@ pub async fn fuzz_subdomains(
             writeln!(file, "{}: {}", subdomain, ips_str)?;
         }
         
-        println!("Saved {} subdomains to: {}", valid_subdomains.len(), output_file);
+        println!("{} {} subdomains to: {}", "✓ Saved".green(), valid_subdomains.len(), output_file);
     }
 
     // Convert to Vec<String> for return (keeping subdomain names only for backward compatibility)

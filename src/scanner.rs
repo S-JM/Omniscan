@@ -4,6 +4,7 @@ use tokio::process::Command;
 use tokio::signal;
 use indicatif::{ProgressBar, ProgressStyle};
 use crate::target::Target;
+use colored::*;
 
 /// Orchestrates the Nmap scanning process.
 ///
@@ -71,9 +72,9 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
         eprintln!("[VERBOSE] Starting alive host discovery on {} targets", target_strings.len());
         eprintln!("[VERBOSE] Using multiple techniques: ICMP echo/timestamp, TCP SYN/ACK, UDP ping");
     }
-    println!("\n{}", "=".repeat(70));
-    println!("  ALIVE HOST DISCOVERY");
-    println!("{}", "=".repeat(70));
+    println!("\n{}", "=".repeat(70).blue().bold());
+    println!("{}", "  ALIVE HOST DISCOVERY".blue().bold());
+    println!("{}", "=".repeat(70).blue().bold());
     println!("Techniques: ICMP (echo, timestamp), TCP SYN/ACK, UDP ping");
     println!("Ports: TCP 21,22,23,25,80,113,443,3389 | UDP 53,123,161");
     println!("{}", "-".repeat(70));
@@ -100,7 +101,7 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
     let mut use_pn = false;
     
     if scan_targets.is_empty() {
-        println!("No alive hosts found.");
+        println!("{}", "No alive hosts found.".red());
         
         // Ask user if they want to continue with -Pn (skip host discovery), or auto-continue if yes_all
         if yes_all {
@@ -121,13 +122,13 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
                 scan_targets = target_strings.clone();
                 use_pn = true;
             } else {
-                println!("Exiting.");
+                println!("{}", "Exiting.".red());
                 return Ok(Vec::new());
             }
         }
     } else {
         println!("{}", "-".repeat(70));
-        println!("✓ Found {} alive host(s): {:?}", scan_targets.len(), scan_targets);
+        println!("{} {} alive host(s): {:?}", "✓ Found".green(), scan_targets.len(), scan_targets);
         println!("{}", "=".repeat(70));
     }
 
@@ -135,9 +136,9 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
     if verbose {
         eprintln!("[VERBOSE] Starting TCP port scan on {} hosts", scan_targets.len());
     }
-    println!("\n{}", "=".repeat(70));
-    println!("  TCP PORT SCAN");
-    println!("{}", "=".repeat(70));
+    println!("\n{}", "=".repeat(70).blue().bold());
+    println!("{}", "  TCP PORT SCAN".blue().bold());
+    println!("{}", "=".repeat(70).blue().bold());
     println!("Scanning all 65535 TCP ports on {} host(s)", scan_targets.len());
     println!("{}", "-".repeat(70));
     // Always use -Pn for port scans since we've already done alive host discovery
@@ -162,9 +163,9 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
     if verbose {
         eprintln!("[VERBOSE] Starting UDP port scan on {} hosts", scan_targets.len());
     }
-    println!("\n{}", "=".repeat(70));
-    println!("  UDP PORT SCAN");
-    println!("{}", "=".repeat(70));
+    println!("\n{}", "=".repeat(70).blue().bold());
+    println!("{}", "  UDP PORT SCAN".blue().bold());
+    println!("{}", "=".repeat(70).blue().bold());
     println!("Scanning top 1000 UDP ports + high-value ports on {} host(s)", scan_targets.len());
     println!("High-value ports: 67,68,69,514,520,1434,1900,4500,5353");
     println!("{}", "-".repeat(70));
@@ -201,9 +202,9 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
     }
 
     if !combined_ports.is_empty() {
-        println!("\n{}", "=".repeat(70));
-        println!("  SERVICE & SCRIPT SCAN");
-        println!("{}", "=".repeat(70));
+        println!("\n{}", "=".repeat(70).blue().bold());
+        println!("{}", "  SERVICE & SCRIPT SCAN".blue().bold());
+        println!("{}", "=".repeat(70).blue().bold());
         println!("Running version detection, OS detection, and default scripts on discovered ports");
         println!("{}", "-".repeat(70));
         
@@ -232,15 +233,15 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
             run_nmap_scan("Script Scan", &final_args, &single_target, output_dir, Some(&host), all_formats).await?;
         }
     } else {
-        println!("\n{}", "=".repeat(70));
-        println!("  SERVICE & SCRIPT SCAN - SKIPPED");
-        println!("{}", "=".repeat(70));
+        println!("\n{}", "=".repeat(70).yellow());
+        println!("{}", "  SERVICE & SCRIPT SCAN - SKIPPED".yellow().bold());
+        println!("{}", "=".repeat(70).yellow());
         println!("No open ports were found, skipping service detection.");
     }
 
-    println!("\n{}", "=".repeat(70));
-    println!("  SCAN COMPLETE");
-    println!("{}", "=".repeat(70));
+    println!("\n{}", "=".repeat(70).green().bold());
+    println!("{}", "  SCAN COMPLETE".green().bold());
+    println!("{}", "=".repeat(70).green().bold());
     
     // Return empty vec for now - SSL port detection will be done in main.rs
     Ok(Vec::new())
@@ -280,9 +281,9 @@ async fn perform_evasion_rescans(
         return Ok(additional_ports);
     }
     
-    println!("\n{}", "=".repeat(70));
-    println!("  FIREWALL EVASION RESCANS");
-    println!("{}", "=".repeat(70));
+    println!("\n{}", "=".repeat(70).blue().bold());
+    println!("{}", "  FIREWALL EVASION RESCANS".blue().bold());
+    println!("{}", "=".repeat(70).blue().bold());
     println!("Found {} host(s) with ≤1 TCP port", low_port_hosts.len());
     println!("Hosts: {:?}", low_port_hosts);
     println!("{}", "-".repeat(70));
@@ -346,7 +347,7 @@ async fn perform_evasion_rescans(
             let host_port_map = parse_ports_per_host_from_gnmap(&output)?;
             if let Some(new_ports) = host_port_map.get(host) {
                 if !new_ports.is_empty() {
-                    println!("✓ Found {} new port(s) with {}: {:?}", new_ports.len(), name, new_ports);
+                    println!("{} {} new port(s) with {}: {:?}", "✓ Found".green(), new_ports.len(), name, new_ports);
                     additional_ports.insert(host.clone(), new_ports.clone());
                     break; // Found ports, move to next host
                 } else {

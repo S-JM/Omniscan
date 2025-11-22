@@ -4,6 +4,7 @@ use nmap_helper::target;
 use nmap_helper::scanner;
 use nmap_helper::fuzzer;
 use nmap_helper::utils;
+use colored::*;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -70,7 +71,7 @@ async fn main() -> Result<()> {
     }
 
     if all_targets_str.is_empty() {
-        eprintln!("No targets provided. Use --help for usage information.");
+        eprintln!("{}", "No targets provided. Use --help for usage information.".red());
         return Ok(());
     }
 
@@ -144,9 +145,10 @@ async fn main() -> Result<()> {
 
 
     // Always show a preview of what will be done
-    println!("\n{}", "=".repeat(70));
-    println!("  PREVIEW: Commands that will be executed");
-    println!("{}", "=".repeat(70));
+    // Always show a preview of what will be done
+    println!("\n{}", "=".repeat(70).blue().bold());
+    println!("{}", "  PREVIEW: Commands that will be executed".blue().bold());
+    println!("{}", "=".repeat(70).blue().bold());
     
     // Show fuzzing preview if applicable
     if args.wordlist.is_some() {
@@ -159,7 +161,7 @@ async fn main() -> Result<()> {
             .collect();
         
         if !domain_targets.is_empty() {
-            println!("\n# Subdomain Fuzzing");
+            println!("\n{}", "# Subdomain Fuzzing".blue().bold());
             println!("Wordlist: {}", args.wordlist.as_ref().unwrap());
             println!("Domains to fuzz: {:?}", domain_targets);
         }
@@ -169,10 +171,10 @@ async fn main() -> Result<()> {
     if !args.testssl_only {
         scanner::run_scans(&scan_targets, &args.output_dir, true, args.verbose, args.all_formats, args.testssl, args.yes_all).await?;
     } else {
-        println!("\n# Nmap Scans");
-        println!("Skipped (--testssl-only)");
+        println!("\n{}", "# Nmap Scans".blue().bold());
+        println!("{}", "Skipped (--testssl-only)".yellow());
         
-        println!("\n# TestSSL.sh Scan");
+        println!("\n{}", "# TestSSL.sh Scan".blue().bold());
         println!("Will run testssl.sh on all provided targets (domains and IPs)");
         if args.wordlist.is_some() {
             println!("And on any subdomains found via fuzzing");
@@ -200,14 +202,14 @@ async fn main() -> Result<()> {
         let response = response.trim().to_lowercase();
         
         if response != "y" && response != "yes" {
-            println!("Execution aborted by user.");
+            println!("{}", "Execution aborted by user.".red());
             return Ok(());
         }
     }
     
-    println!("\n{}", "=".repeat(70));
-    println!("  EXECUTION STARTED");
-    println!("{}", "=".repeat(70));
+    println!("\n{}", "=".repeat(70).green().bold());
+    println!("{}", "  EXECUTION STARTED".green().bold());
+    println!("{}", "=".repeat(70).green().bold());
     
     // Run actual fuzzing if wordlist provided and not skipped
     let mut fuzzed_subdomains = Vec::new();
@@ -217,9 +219,9 @@ async fn main() -> Result<()> {
             println!("  SUBDOMAIN FUZZING - SKIPPED (--skip-fuzzing)");
             println!("{}", "=".repeat(70));
         } else {
-            println!("\n{}", "=".repeat(70));
-            println!("  SUBDOMAIN FUZZING");
-            println!("{}", "=".repeat(70));
+            println!("\n{}", "=".repeat(70).blue().bold());
+            println!("{}", "  SUBDOMAIN FUZZING".blue().bold());
+            println!("{}", "=".repeat(70).blue().bold());
             
             // Create a cancellation token for Ctrl-C handling
             use tokio_util::sync::CancellationToken;
@@ -264,9 +266,9 @@ async fn main() -> Result<()> {
     let ssl_info = if !args.testssl_only {
         scanner::run_scans(&scan_targets, &args.output_dir, false, args.verbose, args.all_formats, args.testssl, args.yes_all).await?
     } else {
-        println!("\n{}", "=".repeat(70));
-        println!("  NMAP SCANS - SKIPPED (--testssl-only)");
-        println!("{}", "=".repeat(70));
+        println!("\n{}", "=".repeat(70).yellow());
+        println!("{}", "  NMAP SCANS - SKIPPED (--testssl-only)".yellow().bold());
+        println!("{}", "=".repeat(70).yellow());
         Vec::new()
     };
     
