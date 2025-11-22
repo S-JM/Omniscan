@@ -16,6 +16,32 @@ pub struct EmailVerificationResult {
     pub dmarc_issues: Vec<String>,
     pub dkim_selectors_found: Vec<String>,
     pub dkim_issues: Vec<String>,
+    pub mx_records: Vec<String>,
+    pub mx_issues: Vec<String>,
+    pub smtp_checks: Vec<SmtpCheckResult>,
+    pub blacklist_results: Vec<BlacklistResult>,
+}
+
+/// SMTP check result for an MX server
+#[derive(Debug, Clone)]
+pub struct SmtpCheckResult {
+    pub mx_host: String,
+    pub mx_ip: String,
+    pub reverse_dns: Option<String>,
+    pub reverse_dns_valid: bool,
+    pub smtp_banner: Option<String>,
+    pub banner_matches_rdns: bool,
+    pub supports_tls: bool,
+    pub is_open_relay: bool,
+    pub issues: Vec<String>,
+}
+
+/// Blacklist check result
+#[derive(Debug, Clone)]
+pub struct BlacklistResult {
+    pub ip: String,
+    pub blacklist_name: String,
+    pub is_listed: bool,
 }
 
 /// Common DKIM selectors to check
@@ -55,7 +81,15 @@ pub async fn verify_email_dns(
         dmarc_issues: Vec::new(),
         dkim_selectors_found: Vec::new(),
         dkim_issues: Vec::new(),
+        mx_records: Vec::new(),
+        mx_issues: Vec::new(),
+        smtp_checks: Vec::new(),
+        blacklist_results: Vec::new(),
     };
+    
+    // Check MX records
+    println!("  {} MX records...", "Checking".blue());
+    check_mx(&resolver, domain, &mut result, verbose).await?;
     
     // Check SPF
     println!("  {} SPF record...", "Checking".blue());
@@ -276,6 +310,278 @@ async fn check_dkim(
     Ok(())
 }
 
+/// Check MX records and perform SMTP verification
+async fn check_mx(
+    resolver: &TokioAsyncResolver,
+    domain: &str,
+    result: &mut EmailVerificationResult,
+    verbose: bool,
+) -> Result<()> {
+    
+    match resolver.mx_lookup(domain).await {
+        Ok(lookup) => {
+            let mut mx_hosts: Vec<(u16, String)> = lookup.iter()
+                .map(|mx| {
+                    (mx.preference(), mx.exchange().to_utf8())
+                })
+                .collect();
+            
+            mx_hosts.sort_by_key(|k| k.0);
+            
+            if mx_hosts.is_empty() {
+                println!("    {} No MX records found", "✗".red());
+                result.mx_issues.push("No MX records found".to_string());
+                return Ok(());
+            }
+            
+            println!("    {} Found {} MX record(s)", "✓".green(), mx_hosts.len());
+            for (pref, host) in &mx_hosts {
+                println!("      {} (priority: {})", host, pref);
+                result.mx_records.push(format!("{} ({})", host, pref));
+            }
+            
+            // Check first MX server (highest priority)
+            if let Some((_, mx_host)) = mx_hosts.first() {
+                println!("  {} SMTP on primary MX: {}", "Checking".blue(), mx_host);
+                check_smtp_server(resolver, mx_host, result, verbose).await?;
+            }
+        },
+        Err(e) => {
+            if verbose {
+                eprintln!("[VERBOSE] MX lookup failed: {}", e);
+            }
+            println!("    {} No MX records found", "✗".red());
+            result.mx_issues.push("MX lookup failed".to_string());
+        }
+    }
+    
+    Ok(())
+}
+
+/// Check SMTP server (reverse DNS, banner, TLS, relay, blacklist)
+async fn check_smtp_server(
+    resolver: &TokioAsyncResolver,
+    mx_host: &str,
+    result: &mut EmailVerificationResult,
+    verbose: bool,
+) -> Result<()> {
+    use tokio::net::TcpStream;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use std::time::Duration;
+    
+    // Resolve MX to IP
+    let mx_ips = match resolver.lookup_ip(mx_host).await {
+        Ok(lookup) => lookup.iter().collect::<Vec<_>>(),
+        Err(e) => {
+            if verbose {
+                eprintln!("[VERBOSE] Failed to resolve MX host {}: {}", mx_host, e);
+            }
+            result.mx_issues.push(format!("Failed to resolve MX host: {}", mx_host));
+            return Ok(());
+        }
+    };
+    
+    if mx_ips.is_empty() {
+        return Ok(());
+    }
+    
+    let mx_ip = mx_ips[0];
+    
+    let mut smtp_result = SmtpCheckResult {
+        mx_host: mx_host.to_string(),
+        mx_ip: mx_ip.to_string(),
+        reverse_dns: None,
+        reverse_dns_valid: false,
+        smtp_banner: None,
+        banner_matches_rdns: false,
+        supports_tls: false,
+        is_open_relay: false,
+        issues: Vec::new(),
+    };
+    
+    // Check reverse DNS
+    match resolver.reverse_lookup(mx_ip).await {
+        Ok(lookup) => {
+            if let Some(ptr) = lookup.iter().next() {
+                let rdns = ptr.to_utf8();
+                smtp_result.reverse_dns = Some(rdns.clone());
+                
+                // Validate reverse DNS (should be a valid hostname)
+                if rdns.contains('.') && !rdns.chars().all(|c| c.is_numeric() || c == '.') {
+                    smtp_result.reverse_dns_valid = true;
+                    println!("    {} Reverse DNS: {}", "✓".green(), rdns);
+                } else {
+                    smtp_result.issues.push("Reverse DNS is not a valid hostname".to_string());
+                    println!("    {} Reverse DNS invalid: {}", "⚠".yellow(), rdns);
+                }
+            } else {
+                smtp_result.issues.push("No reverse DNS record".to_string());
+                println!("    {} No reverse DNS record", "✗".yellow());
+            }
+        },
+        Err(_) => {
+            smtp_result.issues.push("Reverse DNS lookup failed".to_string());
+            println!("    {} No reverse DNS record", "✗".yellow());
+        }
+    }
+    
+    // Connect to SMTP server
+    let addr = format!("{}:25", mx_ip);
+    match tokio::time::timeout(Duration::from_secs(10), TcpStream::connect(&addr)).await {
+        Ok(Ok(mut stream)) => {
+            let mut buffer = vec![0u8; 1024];
+            
+            // Read SMTP banner
+            match tokio::time::timeout(Duration::from_secs(5), stream.read(&mut buffer)).await {
+                Ok(Ok(n)) if n > 0 => {
+                    let banner = String::from_utf8_lossy(&buffer[..n]).trim().to_string();
+                    smtp_result.smtp_banner = Some(banner.clone());
+                    
+                    if verbose {
+                        eprintln!("[VERBOSE] SMTP banner: {}", banner);
+                    }
+                    
+                    println!("    {} SMTP banner received", "✓".green());
+                    
+                    // Check if banner matches reverse DNS
+                    if let Some(rdns) = &smtp_result.reverse_dns {
+                        if banner.to_lowercase().contains(&rdns.to_lowercase()) || 
+                           rdns.to_lowercase().contains(&banner.to_lowercase().split_whitespace().last().unwrap_or("")) {
+                            smtp_result.banner_matches_rdns = true;
+                            println!("    {} Banner matches reverse DNS", "✓".green());
+                        } else {
+                            smtp_result.issues.push("SMTP banner does not match reverse DNS".to_string());
+                            println!("    {} Banner does not match reverse DNS", "⚠".yellow());
+                        }
+                    }
+                    
+                    // Check TLS support (STARTTLS)
+                    let ehlo_cmd = format!("EHLO test.example.com\r\n");
+                    if stream.write_all(ehlo_cmd.as_bytes()).await.is_ok() {
+                        let mut ehlo_buffer = vec![0u8; 2048];
+                        if let Ok(Ok(n)) = tokio::time::timeout(Duration::from_secs(5), stream.read(&mut ehlo_buffer)).await {
+                            let ehlo_response = String::from_utf8_lossy(&ehlo_buffer[..n]);
+                            if ehlo_response.to_uppercase().contains("STARTTLS") {
+                                smtp_result.supports_tls = true;
+                                println!("    {} Supports STARTTLS", "✓".green());
+                            } else {
+                                smtp_result.issues.push("Does not support STARTTLS".to_string());
+                                println!("    {} No STARTTLS support", "⚠".yellow());
+                            }
+                            
+                            // Check for open relay (basic test)
+                            let mail_from = "MAIL FROM:<test@example.com>\r\n";
+                            if stream.write_all(mail_from.as_bytes()).await.is_ok() {
+                                let mut mail_buffer = vec![0u8; 512];
+                                if let Ok(Ok(n)) = tokio::time::timeout(Duration::from_secs(3), stream.read(&mut mail_buffer)).await {
+                                    let mail_response = String::from_utf8_lossy(&mail_buffer[..n]);
+                                    if mail_response.starts_with("250") {
+                                        let rcpt_to = "RCPT TO:<test@external-domain.com>\r\n";
+                                        if stream.write_all(rcpt_to.as_bytes()).await.is_ok() {
+                                            let mut rcpt_buffer = vec![0u8; 512];
+                                            if let Ok(Ok(n)) = tokio::time::timeout(Duration::from_secs(3), stream.read(&mut rcpt_buffer)).await {
+                                                let rcpt_response = String::from_utf8_lossy(&rcpt_buffer[..n]);
+                                                if rcpt_response.starts_with("250") {
+                                                    smtp_result.is_open_relay = true;
+                                                    smtp_result.issues.push("CRITICAL: Possible open relay detected".to_string());
+                                                    println!("    {} CRITICAL: Possible open relay!", "⚠".red());
+                                                } else {
+                                                    println!("    {} Not an open relay", "✓".green());
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Send QUIT
+                    let _ = stream.write_all(b"QUIT\r\n").await;
+                },
+                _ => {
+                    smtp_result.issues.push("Failed to read SMTP banner".to_string());
+                    println!("    {} Failed to read SMTP banner", "✗".yellow());
+                }
+            }
+        },
+        _ => {
+            smtp_result.issues.push("Failed to connect to SMTP server".to_string());
+            println!("    {} Failed to connect to SMTP server", "✗".yellow());
+        }
+    }
+    
+    // Check blacklists
+    println!("  {} Blacklists...", "Checking".blue());
+    check_blacklists(resolver, &mx_ip.to_string(), result, verbose).await?;
+    
+    result.smtp_checks.push(smtp_result);
+    
+    Ok(())
+}
+
+/// Check if IP is blacklisted
+async fn check_blacklists(
+    resolver: &TokioAsyncResolver,
+    ip: &str,
+    result: &mut EmailVerificationResult,
+    verbose: bool,
+) -> Result<()> {
+    // Common blacklists to check
+    let blacklists = vec![
+        ("zen.spamhaus.org", "Spamhaus ZEN"),
+        ("bl.spamcop.net", "SpamCop"),
+        ("b.barracudacentral.org", "Barracuda"),
+        ("dnsbl.sorbs.net", "SORBS"),
+    ];
+    
+    // Reverse IP for DNSBL query (e.g., 1.2.3.4 -> 4.3.2.1)
+    let reversed_ip = ip.split('.')
+        .rev()
+        .collect::<Vec<_>>()
+        .join(".");
+    
+    let mut listed_count = 0;
+    
+    for (bl_domain, bl_name) in blacklists {
+        let query = format!("{}.{}", reversed_ip, bl_domain);
+        
+        if verbose {
+            eprintln!("[VERBOSE] Checking blacklist: {}", bl_name);
+        }
+        
+        let is_listed = match resolver.lookup_ip(&query).await {
+            Ok(_) => {
+                // If lookup succeeds, IP is listed
+                listed_count += 1;
+                println!("    {} Listed on {}", "✗".red(), bl_name);
+                true
+            },
+            Err(_) => {
+                // If lookup fails, IP is not listed
+                if verbose {
+                    eprintln!("[VERBOSE] Not listed on {}", bl_name);
+                }
+                false
+            }
+        };
+        
+        result.blacklist_results.push(BlacklistResult {
+            ip: ip.to_string(),
+            blacklist_name: bl_name.to_string(),
+            is_listed,
+        });
+    }
+    
+    if listed_count == 0 {
+        println!("    {} Not listed on checked blacklists", "✓".green());
+    } else {
+        result.mx_issues.push(format!("IP listed on {} blacklist(s)", listed_count));
+    }
+    
+    Ok(())
+}
+
 /// Save email verification results to file
 fn save_email_verification_results(
     result: &EmailVerificationResult,
@@ -357,11 +663,84 @@ fn save_email_verification_results(
     }
     writeln!(file)?;
     
+    // MX Section
+    writeln!(file, "MX (Mail Exchange) Records")?;
+    writeln!(file, "{}", "-".repeat(70))?;
+    if !result.mx_records.is_empty() {
+        writeln!(file, "Status: PRESENT")?;
+        writeln!(file, "Records:")?;
+        for mx in &result.mx_records {
+            writeln!(file, "  - {}", mx)?;
+        }
+    } else {
+        writeln!(file, "Status: NOT FOUND")?;
+    }
+    
+    if !result.mx_issues.is_empty() {
+        writeln!(file, "\nIssues:")?;
+        for issue in &result.mx_issues {
+            writeln!(file, "  - {}", issue)?;
+        }
+    }
+    writeln!(file)?;
+    
+    // SMTP Checks Section
+    if !result.smtp_checks.is_empty() {
+        writeln!(file, "SMTP Server Checks")?;
+        writeln!(file, "{}", "-".repeat(70))?;
+        for smtp in &result.smtp_checks {
+            writeln!(file, "MX Host: {}", smtp.mx_host)?;
+            writeln!(file, "IP: {}", smtp.mx_ip)?;
+            
+            if let Some(rdns) = &smtp.reverse_dns {
+                writeln!(file, "Reverse DNS: {} (valid: {})", rdns, smtp.reverse_dns_valid)?;
+            } else {
+                writeln!(file, "Reverse DNS: NOT FOUND")?;
+            }
+            
+            if let Some(banner) = &smtp.smtp_banner {
+                writeln!(file, "SMTP Banner: {}", banner)?;
+                writeln!(file, "Banner matches rDNS: {}", smtp.banner_matches_rdns)?;
+            }
+            
+            writeln!(file, "Supports TLS (STARTTLS): {}", smtp.supports_tls)?;
+            writeln!(file, "Open Relay: {}", smtp.is_open_relay)?;
+            
+            if !smtp.issues.is_empty() {
+                writeln!(file, "Issues:")?;
+                for issue in &smtp.issues {
+                    writeln!(file, "  - {}", issue)?;
+                }
+            }
+            writeln!(file)?;
+        }
+    }
+    
+    // Blacklist Section
+    if !result.blacklist_results.is_empty() {
+        writeln!(file, "Blacklist Checks")?;
+        writeln!(file, "{}", "-".repeat(70))?;
+        let listed_count = result.blacklist_results.iter().filter(|bl| bl.is_listed).count();
+        writeln!(file, "Listed on {} of {} checked blacklists", listed_count, result.blacklist_results.len())?;
+        writeln!(file)?;
+        for bl in &result.blacklist_results {
+            if bl.is_listed {
+                writeln!(file, "  ✗ {} - LISTED", bl.blacklist_name)?;
+            } else {
+                writeln!(file, "  ✓ {} - Not listed", bl.blacklist_name)?;
+            }
+        }
+        writeln!(file)?;
+    }
+    
     // Summary
     writeln!(file, "Summary")?;
     writeln!(file, "{}", "-".repeat(70))?;
-    let total_issues = result.spf_issues.len() + result.dmarc_issues.len() + result.dkim_issues.len();
-    writeln!(file, "Total issues found: {}", total_issues)?;
+    let total_issues = result.spf_issues.len() + result.dmarc_issues.len() + result.dkim_issues.len() + result.mx_issues.len();
+    let smtp_issues: usize = result.smtp_checks.iter().map(|s| s.issues.len()).sum();
+    let blacklist_count = result.blacklist_results.iter().filter(|bl| bl.is_listed).count();
+    writeln!(file, "Total issues found: {}", total_issues + smtp_issues)?;
+    writeln!(file, "Blacklists: {}", blacklist_count)?;
     
     println!("{} Results saved to: {}", "✓".green(), output_file);
     
