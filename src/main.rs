@@ -194,6 +194,7 @@ async fn main() -> Result<()> {
     println!("{}", "=".repeat(70));
     
     // Run actual fuzzing if wordlist provided and not skipped
+    let mut fuzzed_subdomains = Vec::new();
     if let Some(wordlist) = &args.wordlist {
         if args.skip_fuzzing {
             println!("\n{}", "=".repeat(70));
@@ -216,22 +217,21 @@ async fn main() -> Result<()> {
             });
             
             // Run fuzzing with cancellation support
-            let fuzzing_result = tokio::select! {
-                result = fuzzer::fuzz_subdomains(&targets, wordlist, &args.output_dir, args.verbose, cancel_token.clone()) => {
-                    result
-                }
-                _ = cancel_token.cancelled() => {
-                    println!("\n\nFuzzing cancelled by user (Ctrl-C). Continuing to scans...");
-                    Ok(Vec::new())
-                }
-            };
-            
-            match fuzzing_result {
-                Ok(found_subdomains) => {
-                    if !found_subdomains.is_empty() {
-                        println!("Found {} valid subdomains:", found_subdomains.len());
-                        for d in &found_subdomains {
+            // Note: fuzzer::fuzz_subdomains handles the cancellation token internally
+            // and returns partial results if cancelled.
+            match fuzzer::fuzz_subdomains(&targets, wordlist, &args.output_dir, args.verbose, cancel_token.clone()).await {
+                Ok(found) => {
+                    fuzzed_subdomains = found;
+                    if !fuzzed_subdomains.is_empty() {
+                        println!("Found {} valid subdomains:", fuzzed_subdomains.len());
+                        for d in &fuzzed_subdomains {
                             println!("{}", d);
+                        }
+                        
+                        // Add to scan targets
+                        println!("Adding found subdomains to scan targets...");
+                        for sub in &fuzzed_subdomains {
+                            scan_targets.push(target::Target::Domain(sub.clone()));
                         }
                     }
                 }
@@ -249,13 +249,18 @@ async fn main() -> Result<()> {
     // Run testssl.sh if enabled
     if args.testssl {
         // Collect domain targets from original input
-        let domain_targets: Vec<String> = targets
+        let mut domain_targets: Vec<String> = targets
             .iter()
             .filter_map(|t| match t {
                 target::Target::Domain(d) => Some(d.clone()),
                 _ => None,
             })
             .collect();
+            
+        // Add fuzzed subdomains to TestSSL targets
+        if !fuzzed_subdomains.is_empty() {
+            domain_targets.extend(fuzzed_subdomains.clone());
+        }
         
         // ssl_info contains (ip, port) pairs for discovered SSL services
         nmap_helper::ssl_scanner::run_testssl_scans(&domain_targets, &ssl_info, &args.output_dir).await?;
