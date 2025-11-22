@@ -37,14 +37,12 @@ pub async fn run_testssl(
     // We set OPENSSL_CONF to /dev/null to avoid loading system OpenSSL config (e.g. /etc/ssl/openssl.cnf)
     // which might be incompatible (e.g. OpenSSL 3.0 config vs bundled 1.1.1 binary).
     let use_bundled_openssl = if cfg!(unix) {
-        println!("Verifying bundled OpenSSL at {:?}...", openssl_path);
         match std::process::Command::new(openssl_path)
             .arg("version")
             .env("OPENSSL_CONF", "/dev/null")
             .output() 
         {
             Ok(output) if output.status.success() => {
-                println!("✓ Bundled OpenSSL is functional: {}", String::from_utf8_lossy(&output.stdout).trim());
                 true
             },
             Ok(output) => {
@@ -72,10 +70,12 @@ pub async fn run_testssl(
         cmd.env("OPENSSL_CONF", "/dev/null");
     }
 
-    // If output file exists, append to it instead of overwriting
+    // If output file exists, delete it to ensure a fresh scan
     if std::path::Path::new(&output_file).exists() {
-        println!("Output file {} already exists, appending results...", output_file);
-        cmd.arg("--append");
+        println!("Output file {} already exists, deleting...", output_file);
+        if let Err(e) = std::fs::remove_file(&output_file) {
+            eprintln!("Warning: Failed to delete existing output file {}: {}", output_file, e);
+        }
     }
 
     cmd.arg(&target_port)
