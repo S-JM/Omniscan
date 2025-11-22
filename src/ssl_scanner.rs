@@ -20,6 +20,7 @@ pub async fn run_testssl(
     output_dir: &str,
     testssl_path: &Path,
     openssl_path: &Path,
+    verbose: bool,
 ) -> Result<()> {
     let port_str = port.unwrap_or(443).to_string();
     let target_port = format!("{}:{}", target, port_str);
@@ -83,7 +84,9 @@ pub async fn run_testssl(
         .stderr(Stdio::piped())
         .kill_on_drop(true);
     println!("Running testssl.sh on {}", target_port);
-    println!("Command: {:?}", cmd);
+    if verbose {
+        println!("Command: {:?}", cmd);
+    }
     
     let pb = ProgressBar::new_spinner();
     pb.set_style(ProgressStyle::default_spinner().template("{spinner:.green} {msg}")?);
@@ -115,6 +118,7 @@ pub async fn run_testssl_scans(
     domains: &[String],
     ip_ssl_ports: &[(String, u16)],
     output_dir: &str,
+    verbose: bool,
 ) -> Result<()> {
     println!("\n{}", "=".repeat(70));
     println!("  SSL/TLS SECURITY SCAN (testssl.sh)");
@@ -124,15 +128,17 @@ pub async fn run_testssl_scans(
     let (temp_dir, _testssl_dir, testssl_path, openssl_path) = assets::extract_assets()
         .context("Failed to extract testssl.sh assets")?;
     
-    println!("Extracted testssl.sh to: {:?}", testssl_path);
-    println!("Extracted openssl to: {:?}", openssl_path);
+    if verbose {
+        println!("Extracted testssl.sh to: {:?}", testssl_path);
+        println!("Extracted openssl to: {:?}", openssl_path);
+    }
     println!("{}", "-".repeat(70));
     
     // Scan domains
     if !domains.is_empty() {
         println!("\nScanning {} domain(s):", domains.len());
         for domain in domains {
-            if let Err(e) = run_testssl(domain, None, output_dir, &testssl_path, &openssl_path).await {
+            if let Err(e) = run_testssl(domain, None, output_dir, &testssl_path, &openssl_path, verbose).await {
                 eprintln!("Failed to scan {}: {}", domain, e);
             }
         }
@@ -142,7 +148,7 @@ pub async fn run_testssl_scans(
     if !ip_ssl_ports.is_empty() {
         println!("\nScanning {} IP:port pair(s) with SSL/TLS:", ip_ssl_ports.len());
         for (ip, port) in ip_ssl_ports {
-            if let Err(e) = run_testssl(ip, Some(*port), output_dir, &testssl_path, &openssl_path).await {
+            if let Err(e) = run_testssl(ip, Some(*port), output_dir, &testssl_path, &openssl_path, verbose).await {
                 eprintln!("Failed to scan {}:{}: {}", ip, port, e);
             }
         }

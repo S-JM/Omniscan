@@ -297,7 +297,7 @@ async fn main() -> Result<()> {
         }
         
         // ssl_info contains (ip, port) pairs for discovered SSL services
-        nmap_helper::ssl_scanner::run_testssl_scans(&domain_targets, &ssl_info, &args.output_dir).await?;
+        nmap_helper::ssl_scanner::run_testssl_scans(&domain_targets, &ssl_info, &args.output_dir, args.verbose).await?;
     }
     
     Ok(())
