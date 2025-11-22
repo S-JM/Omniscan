@@ -103,6 +103,10 @@ pub async fn verify_email_dns(
     println!("  {} DKIM records...", "Checking".blue());
     check_dkim(&resolver, domain, &mut result, verbose).await?;
     
+    // Check domain blacklists (RHSBL)
+    println!("  {} Domain blacklists...", "Checking".blue());
+    check_domain_blacklists(&resolver, domain, &mut result, verbose).await?;
+    
     Ok(result)
 }
 
@@ -577,6 +581,61 @@ async fn check_blacklists(
         println!("    {} Not listed on checked blacklists", "✓".green());
     } else {
         result.mx_issues.push(format!("IP listed on {} blacklist(s)", listed_count));
+    }
+    
+    Ok(())
+}
+
+/// Check if domain is blacklisted (RHSBL - Right Hand Side Blacklist)
+async fn check_domain_blacklists(
+    resolver: &TokioAsyncResolver,
+    domain: &str,
+    result: &mut EmailVerificationResult,
+    verbose: bool,
+) -> Result<()> {
+    // Common domain blacklists (RHSBL)
+    let domain_blacklists = vec![
+        ("dbl.spamhaus.org", "Spamhaus DBL"),
+        ("rhsbl.sorbs.net", "SORBS RHSBL"),
+        ("multi.surbl.org", "SURBL Multi"),
+    ];
+    
+    let mut listed_count = 0;
+    
+    for (bl_domain, bl_name) in domain_blacklists {
+        let query = format!("{}.{}", domain, bl_domain);
+        
+        if verbose {
+            eprintln!("[VERBOSE] Checking domain blacklist: {}", bl_name);
+        }
+        
+        let is_listed = match resolver.lookup_ip(&query).await {
+            Ok(_) => {
+                // If lookup succeeds, domain is listed
+                listed_count += 1;
+                println!("    {} Listed on {}", "✗".red(), bl_name);
+                true
+            },
+            Err(_) => {
+                // If lookup fails, domain is not listed
+                if verbose {
+                    eprintln!("[VERBOSE] Not listed on {}", bl_name);
+                }
+                false
+            }
+        };
+        
+        result.blacklist_results.push(BlacklistResult {
+            ip: domain.to_string(), // Using domain field for domain blacklists
+            blacklist_name: format!("{} (domain)", bl_name),
+            is_listed,
+        });
+    }
+    
+    if listed_count == 0 {
+        println!("    {} Domain not listed on checked blacklists", "✓".green());
+    } else {
+        result.mx_issues.push(format!("Domain listed on {} blacklist(s)", listed_count));
     }
     
     Ok(())
