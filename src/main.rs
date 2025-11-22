@@ -4,6 +4,7 @@ use nmap_helper::target;
 use nmap_helper::scanner;
 use nmap_helper::fuzzer;
 use nmap_helper::utils;
+use nmap_helper::zone_transfer;
 use colored::*;
 
 #[derive(Parser, Debug)]
@@ -53,6 +54,10 @@ struct Args {
     /// Automatically answer yes to all prompts
     #[arg(long)]
     yes_all: bool,
+
+    /// Run ONLY DNS zone transfer on all provided domains (skips Nmap, fuzzing, TestSSL).
+    #[arg(long)]
+    zone_transfer_only: bool,
 }
 
 #[tokio::main]
@@ -167,8 +172,38 @@ async fn main() -> Result<()> {
         }
     }
     
+    // Show zone transfer preview if applicable
+    let domain_targets: Vec<String> = targets
+        .iter()
+        .filter_map(|t| match t {
+            target::Target::Domain(d) => Some(d.clone()),
+            _ => None,
+        })
+        .collect();
+    
+    if !domain_targets.is_empty() {
+        println!("\n{}", "# DNS Zone Transfer".blue().bold());
+        if args.zone_transfer_only {
+            println!("Will attempt zone transfers on {} domain(s) (--zone-transfer-only)", domain_targets.len());
+        } else {
+            println!("Will attempt zone transfers on {} domain(s)", domain_targets.len());
+        }
+        println!("Domains: {:?}", domain_targets);
+    }
+    
     // Show scan preview by calling run_scans in dry-run mode
-    if !args.testssl_only {
+    if !args.testssl_only && !args.zone_transfer_only {
+        scanner::run_scans(&scan_targets, &args.output_dir, true, args.verbose, args.all_formats, args.testssl, args.yes_all).await?;
+    } else if args.zone_transfer_only {
+        println!("\n{}", "# Nmap Scans".blue().bold());
+        println!("{}", "Skipped (--zone-transfer-only)".yellow());
+        
+        println!("\n{}", "# Subdomain Fuzzing".blue().bold());
+        println!("{}", "Skipped (--zone-transfer-only)".yellow());
+        
+        println!("\n{}", "# TestSSL.sh Scan".blue().bold());
+        println!("{}", "Skipped (--zone-transfer-only)".yellow());
+    } else if args.testssl_only {
         scanner::run_scans(&scan_targets, &args.output_dir, true, args.verbose, args.all_formats, args.testssl, args.yes_all).await?;
     } else {
         println!("\n{}", "# Nmap Scans".blue().bold());
@@ -210,6 +245,34 @@ async fn main() -> Result<()> {
     println!("\n{}", "=".repeat(70).green().bold());
     println!("{}", "  EXECUTION STARTED".green().bold());
     println!("{}", "=".repeat(70).green().bold());
+    
+    // Run zone transfer if we have domains (unless skipped)
+    if !domain_targets.is_empty() && !args.testssl_only {
+        match zone_transfer::run_zone_transfers(&domain_targets, &args.output_dir, args.verbose).await {
+            Ok(discovered) => {
+                if !discovered.is_empty() {
+                    println!("Adding {} discovered hosts from zone transfer to scan targets...", discovered.len());
+                    for host in &discovered {
+                        // Try to parse as IP first
+                        if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+                            scan_targets.push(target::Target::IP(ip));
+                        } else {
+                            // Otherwise treat as domain
+                            scan_targets.push(target::Target::Domain(host.clone()));
+                        }
+                    }
+                }
+            },
+            Err(e) => {
+                eprintln!("Zone transfer error: {}", e);
+            }
+        }
+    }
+    
+    // If --zone-transfer-only, exit here
+    if args.zone_transfer_only {
+        return Ok(());
+    }
     
     // Run actual fuzzing if wordlist provided and not skipped
     let mut fuzzed_subdomains = Vec::new();
