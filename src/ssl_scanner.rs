@@ -33,9 +33,30 @@ pub async fn run_testssl(
         .arg("--jsonfile-pretty")
         .arg(&output_file);
 
-    // Only use bundled OpenSSL on Unix/Linux
-    #[cfg(unix)]
-    {
+    // Check if bundled OpenSSL works
+    let use_bundled_openssl = if cfg!(unix) {
+        println!("Verifying bundled OpenSSL at {:?}...", openssl_path);
+        match std::process::Command::new(openssl_path).arg("version").output() {
+            Ok(output) if output.status.success() => {
+                println!("✓ Bundled OpenSSL is functional: {}", String::from_utf8_lossy(&output.stdout).trim());
+                true
+            },
+            Ok(output) => {
+                eprintln!("Warning: Bundled OpenSSL failed to run (status {}). Using system OpenSSL instead.", output.status);
+                eprintln!("Stderr: {}", String::from_utf8_lossy(&output.stderr));
+                false
+            },
+            Err(e) => {
+                eprintln!("Warning: Failed to execute bundled OpenSSL ({}). Using system OpenSSL instead.", e);
+                false
+            }
+        }
+    } else {
+        // On Windows, we rely on system OpenSSL
+        false
+    };
+
+    if use_bundled_openssl {
         cmd.arg("--openssl").arg(openssl_path);
     }
 
