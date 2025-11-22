@@ -34,16 +34,26 @@ pub async fn run_testssl(
         .arg(&output_file);
 
     // Check if bundled OpenSSL works
+    // We set OPENSSL_CONF to /dev/null to avoid loading system OpenSSL config (e.g. /etc/ssl/openssl.cnf)
+    // which might be incompatible (e.g. OpenSSL 3.0 config vs bundled 1.1.1 binary).
     let use_bundled_openssl = if cfg!(unix) {
         println!("Verifying bundled OpenSSL at {:?}...", openssl_path);
-        match std::process::Command::new(openssl_path).arg("version").output() {
+        match std::process::Command::new(openssl_path)
+            .arg("version")
+            .env("OPENSSL_CONF", "/dev/null")
+            .output() 
+        {
             Ok(output) if output.status.success() => {
                 println!("✓ Bundled OpenSSL is functional: {}", String::from_utf8_lossy(&output.stdout).trim());
                 true
             },
             Ok(output) => {
                 eprintln!("Warning: Bundled OpenSSL failed to run (status {}). Using system OpenSSL instead.", output.status);
-                eprintln!("Stderr: {}", String::from_utf8_lossy(&output.stderr));
+                // Only print stderr if verbose or if it's not the common config error
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                if !stderr.contains("configuration file routines") {
+                    eprintln!("Stderr: {}", stderr);
+                }
                 false
             },
             Err(e) => {
@@ -58,6 +68,8 @@ pub async fn run_testssl(
 
     if use_bundled_openssl {
         cmd.arg("--openssl").arg(openssl_path);
+        // Also set env var for the actual execution
+        cmd.env("OPENSSL_CONF", "/dev/null");
     }
 
     // If output file exists, append to it instead of overwriting
