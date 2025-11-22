@@ -31,14 +31,24 @@ pub async fn run_testssl(
     let mut cmd = Command::new("bash");
     cmd.arg(testssl_path)
         .arg("--jsonfile-pretty")
-        .arg(&output_file)
-        .arg("--openssl")
-        .arg(openssl_path)
-        .arg(&target_port)
+        .arg(&output_file);
+
+    // Only use bundled OpenSSL on Unix/Linux
+    #[cfg(unix)]
+    {
+        cmd.arg("--openssl").arg(openssl_path);
+    }
+
+    // If output file exists, append to it instead of overwriting
+    if std::path::Path::new(&output_file).exists() {
+        println!("Output file {} already exists, appending results...", output_file);
+        cmd.arg("--append");
+    }
+
+    cmd.arg(&target_port)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
-    
     println!("Running testssl.sh on {}", target_port);
     println!("Command: {:?}", cmd);
     
