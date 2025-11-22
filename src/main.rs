@@ -40,6 +40,11 @@ struct Args {
     #[arg(long)]
     testssl: bool,
 
+    /// Run ONLY testssl.sh on all provided targets (skips Nmap scans).
+    /// NOTE: This bypasses strict scoping rules - all provided domains and IPs will be scanned.
+    #[arg(long)]
+    testssl_only: bool,
+
     /// Skip subdomain fuzzing
     #[arg(long)]
     skip_fuzzing: bool,
@@ -244,10 +249,18 @@ async fn main() -> Result<()> {
     
     
     // Pass scan targets (filtered IPs only) to scanner for actual execution
-    let ssl_info = scanner::run_scans(&scan_targets, &args.output_dir, false, args.verbose, args.all_formats, args.testssl, args.yes_all).await?;
+    // If --testssl-only is set, skip Nmap scans
+    let ssl_info = if !args.testssl_only {
+        scanner::run_scans(&scan_targets, &args.output_dir, false, args.verbose, args.all_formats, args.testssl, args.yes_all).await?
+    } else {
+        println!("\n{}", "=".repeat(70));
+        println!("  NMAP SCANS - SKIPPED (--testssl-only)");
+        println!("{}", "=".repeat(70));
+        Vec::new()
+    };
     
-    // Run testssl.sh if enabled
-    if args.testssl {
+    // Run testssl.sh if enabled (either via --testssl or --testssl-only)
+    if args.testssl || args.testssl_only {
         // Collect domain targets from original input
         let mut domain_targets: Vec<String> = targets
             .iter()
@@ -256,6 +269,16 @@ async fn main() -> Result<()> {
                 _ => None,
             })
             .collect();
+            
+        // If testssl-only is set, also add all provided IPs to the target list
+        // This bypasses the strict scoping rule used for Nmap scans
+        if args.testssl_only {
+            for t in &targets {
+                if let target::Target::IP(ip) = t {
+                    domain_targets.push(ip.to_string());
+                }
+            }
+        }
             
         // Add fuzzed subdomains to TestSSL targets
         if !fuzzed_subdomains.is_empty() {
