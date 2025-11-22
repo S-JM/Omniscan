@@ -1,68 +1,122 @@
-# Nmap Helper
+# Omniscan
 
-An automated Nmap scanning tool written in Rust. It helps perform Nmap scans for a huge scope of targets, performs subdomain fuzzing, and implements progressive firewall evasion techniques.
+Automated Nmap scanning with SSL/TLS analysis, DNS zone transfers, email security verification, and subdomain enumeration.
 
 ## Features
 
-*   **Automated Scan Orchestration**: Runs a sequence of scans: Alive Host Discovery -> TCP Port Scan -> UDP Port Scan -> Service & Script Scan.
-*   **Smart Host Discovery**: Uses multiple techniques (ICMP, TCP SYN/ACK, UDP) to detect hosts behind firewalls.
-*   **Progressive Firewall Evasion**: Automatically detects hosts with few open ports and interactively offers evasion techniques (fragmentation, source ports, bad checksums, etc.).
-*   **High-Value UDP Scanning**: Scans top 1000 UDP ports plus critical services like DHCP, TFTP, Syslog, etc.
-*   **Subdomain Fuzzing**: Integrated subdomain enumeration and DNS resolution.
-*   **Flexible Output**: Supports XML (default) and all Nmap formats (`-oA`), with organized file naming.
-*   **Dry-Run Mode**: Preview commands before execution.
+### Core Scanning
+*   Scan sequence: Host discovery → TCP scan → UDP scan → Service/script scan
+*   Host discovery: ICMP, TCP SYN/ACK, UDP probes
+*   Firewall evasion: Fragmentation, source port manipulation, bad checksums
+*   UDP: Top 1000 ports + DHCP, TFTP, Syslog
+
+### DNS & Domain
+*   AXFR zone transfers
+*   Subdomain fuzzing with DNS resolution
+*   Discovered hosts added to scan targets
+
+### Email Security
+*   SPF: Syntax validation, policy checks, DNS lookup count
+*   DMARC: Policy verification, reporting configuration
+*   DKIM: Common selector checks
+*   MX: Record discovery and validation
+*   Reverse DNS validation
+*   SMTP banner verification
+*   STARTTLS detection
+*   Open relay testing
+*   Blacklists:
+  - DNSBL: Spamhaus ZEN, SpamCop, Barracuda, SORBS
+  - RHSBL: Spamhaus DBL, SORBS RHSBL, SURBL Multi
+
+### SSL/TLS
+*   testssl.sh integration (GPLv2)
+*   Scans discovered SSL/TLS services
+*   JSON output: ciphers, protocols, vulnerabilities, certificates
+
+### Usability
+*   Colored output
+*   XML (default) or all Nmap formats
+*   Dry-run mode
+*   Modes: `--testssl-only`, `--zone-transfer-only`, `--email-verification-only`, `--skip-fuzzing`
+*   `--yes-all` for unattended execution
 
 ## Prerequisites
 
-*   **Nmap**: `nmap` must be installed and in your system's PATH.
+*   `nmap` in PATH
+*   Bash (Linux/macOS) or WSL/Git Bash (Windows) for testssl.sh
 
 ## Installation
 
-### Option 1: Download Binary (Preferred)
+### Binary
+1.  Download from [Releases](../../releases)
+2.  `chmod +x omniscan` (Linux/macOS)
 
-1.  Download the latest release binary for your platform from the [Releases](../../releases) page.
-2.  Make the binary executable (Linux/macOS):
-    ```bash
-    chmod +x nmap_helper
-    ```
-3.  Run it directly!
-
-### Option 2: Build from Source
-
-**Prerequisites:**
-*   **Rust**: You need the Rust toolchain installed (cargo, rustc). [Install Rust](https://www.rust-lang.org/tools/install)
-
-**Steps:**
-1.  Clone the repository (if applicable) or navigate to the project directory.
-2.  Build the project using Cargo:
-    ```bash
-    cargo build --release
-    ```
-3.  The executable will be located in `target/release/nmap_helper` (or `nmap_helper.exe` on Windows).
+### Build
+```bash
+cargo build --release
+# Binary: target/release/omniscan
+```
 
 ## Usage
 
 ```bash
-# Basic scan of a target IP or CIDR
-./nmap_helper 192.168.1.1
+# Basic
+./omniscan 192.168.1.1
 
-# Scan with all output formats enabled
-./nmap_helper --all-formats 192.168.1.1
+# All formats
+./omniscan --all-formats 192.168.1.1
 
-# Dry-run mode (preview commands)
-./nmap_helper --dry-run 192.168.1.1
+# Dry-run
+./omniscan --dry-run 192.168.1.1
 
 # Subdomain fuzzing
-./nmap_helper --domain example.com --wordlist subdomains.txt
+./omniscan example.com --wordlist subdomains.txt
 
-# Scan targets from a file (one target per line)
-./nmap_helper -i targets.txt
+# SSL/TLS scan
+./omniscan --testssl 192.168.1.0/24
+
+# SSL/TLS only
+./omniscan --testssl-only example.com
+
+# Zone transfer only
+./omniscan --zone-transfer-only example.com
+
+# Email verification only
+./omniscan --email-verification-only example.com
+
+# Skip fuzzing
+./omniscan --skip-fuzzing example.com --wordlist subdomains.txt
+
+# Unattended
+./omniscan --yes-all 192.168.1.0/24
+
+# From file
+./omniscan -i targets.txt
+
+# Output directory
+./omniscan --output-dir ./results 192.168.1.1
 ```
 
-## AI Assistance
+## Output Files
 
-This project was designed and coded with the assistance of AI.
+- `alive_hosts.txt`
+- `tcp_scan.xml`
+- `udp_scan.xml`
+- `service_scan.xml`
+- `testssl_<target>.json`
+- `zone_transfer_<domain>.txt`
+- `email_verification_<domain>.txt`
+- `found_subdomains.txt`
+
+## Third-Party Components
+
+Embeds [testssl.sh](https://github.com/drwetter/testssl.sh) v3.0.4 (GPLv2) by Dirk Wetter.
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+MIT License. See [LICENSE](LICENSE).
+
+testssl.sh component: GPLv2.
+
+
+

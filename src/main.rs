@@ -1,11 +1,11 @@
 use clap::Parser;
 use anyhow::Result;
-use nmap_helper::target;
-use nmap_helper::scanner;
-use nmap_helper::fuzzer;
-use nmap_helper::utils;
-use nmap_helper::zone_transfer;
-use nmap_helper::email_verification;
+use omniscan::target;
+use omniscan::scanner;
+use omniscan::fuzzer;
+use omniscan::utils;
+use omniscan::zone_transfer;
+use omniscan::email_verification;
 use colored::*;
 
 #[derive(Parser, Debug)]
@@ -402,7 +402,7 @@ async fn main() -> Result<()> {
         }
         
         // ssl_info contains (ip, port) pairs for discovered SSL services
-        nmap_helper::ssl_scanner::run_testssl_scans(&domain_targets, &ssl_info, &args.output_dir, args.verbose).await?;
+        omniscan::ssl_scanner::run_testssl_scans(&domain_targets, &ssl_info, &args.output_dir, args.verbose).await?;
     }
     
     Ok(())
