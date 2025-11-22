@@ -166,7 +166,18 @@ async fn main() -> Result<()> {
     }
     
     // Show scan preview by calling run_scans in dry-run mode
-    scanner::run_scans(&scan_targets, &args.output_dir, true, args.verbose, args.all_formats, args.testssl, args.yes_all).await?;
+    if !args.testssl_only {
+        scanner::run_scans(&scan_targets, &args.output_dir, true, args.verbose, args.all_formats, args.testssl, args.yes_all).await?;
+    } else {
+        println!("\n# Nmap Scans");
+        println!("Skipped (--testssl-only)");
+        
+        println!("\n# TestSSL.sh Scan");
+        println!("Will run testssl.sh on all provided targets (domains and IPs)");
+        if args.wordlist.is_some() {
+            println!("And on any subdomains found via fuzzing");
+        }
+    }
     
     // If --dry-run flag is set, exit here
     if args.dry_run {
