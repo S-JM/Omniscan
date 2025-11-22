@@ -35,6 +35,14 @@ struct Args {
     /// Output all formats (XML, normal, grepable) instead of just XML
     #[arg(long)]
     all_formats: bool,
+
+    /// Skip subdomain fuzzing
+    #[arg(long)]
+    skip_fuzzing: bool,
+
+    /// Automatically answer yes to all prompts
+    #[arg(long)]
+    yes_all: bool,
 }
 
 #[tokio::main]
@@ -149,48 +157,89 @@ async fn main() -> Result<()> {
     }
     
     // Show scan preview by calling run_scans in dry-run mode
-    scanner::run_scans(&scan_targets, &args.output_dir, true, args.verbose, args.all_formats).await?;
+    scanner::run_scans(&scan_targets, &args.output_dir, true, args.verbose, args.all_formats, args.yes_all).await?;
     
     // If --dry-run flag is set, exit here
     if args.dry_run {
         return Ok(());
     }
     
-    // Ask user for confirmation
-    println!("\n{}", "=".repeat(70));
-    print!("Do you want to proceed with execution? [y/N]: ");
-    use std::io::{self, Write};
-    io::stdout().flush()?;
-    
-    let mut response = String::new();
-    io::stdin().read_line(&mut response)?;
-    let response = response.trim().to_lowercase();
-    
-    if response != "y" && response != "yes" {
-        println!("Execution aborted by user.");
-        return Ok(());
+    // Ask user for confirmation (unless --yes-all is set)
+    if args.yes_all {
+        println!("\n{}", "=".repeat(70));
+        println!("  AUTO-CONFIRMED (--yes-all)");
+        println!("{}", "=".repeat(70));
+    } else {
+        println!("\n{}", "=".repeat(70));
+        print!("Do you want to proceed with execution? [y/N]: ");
+        use std::io::{self, Write};
+        io::stdout().flush()?;
+        
+        let mut response = String::new();
+        io::stdin().read_line(&mut response)?;
+        let response = response.trim().to_lowercase();
+        
+        if response != "y" && response != "yes" {
+            println!("Execution aborted by user.");
+            return Ok(());
+        }
     }
     
     println!("\n{}", "=".repeat(70));
     println!("  EXECUTION STARTED");
     println!("{}", "=".repeat(70));
     
-    // Run actual fuzzing if wordlist provided
+    // Run actual fuzzing if wordlist provided and not skipped
     if let Some(wordlist) = &args.wordlist {
-        println!("\n{}", "=".repeat(70));
-        println!("  SUBDOMAIN FUZZING");
-        println!("{}", "=".repeat(70));
-        let found_subdomains = fuzzer::fuzz_subdomains(&targets, wordlist, &args.output_dir, args.verbose).await?;
-        if !found_subdomains.is_empty() {
-            println!("Found {} valid subdomains:", found_subdomains.len());
-            for d in &found_subdomains {
-                println!("{}", d);
+        if args.skip_fuzzing {
+            println!("\n{}", "=".repeat(70));
+            println!("  SUBDOMAIN FUZZING - SKIPPED (--skip-fuzzing)");
+            println!("{}", "=".repeat(70));
+        } else {
+            println!("\n{}", "=".repeat(70));
+            println!("  SUBDOMAIN FUZZING");
+            println!("{}", "=".repeat(70));
+            
+            // Create a cancellation token for Ctrl-C handling
+            use tokio_util::sync::CancellationToken;
+            let cancel_token = CancellationToken::new();
+            let cancel_token_clone = cancel_token.clone();
+            
+            // Spawn a task to listen for Ctrl-C
+            tokio::spawn(async move {
+                tokio::signal::ctrl_c().await.ok();
+                cancel_token_clone.cancel();
+            });
+            
+            // Run fuzzing with cancellation support
+            let fuzzing_result = tokio::select! {
+                result = fuzzer::fuzz_subdomains(&targets, wordlist, &args.output_dir, args.verbose, cancel_token.clone()) => {
+                    result
+                }
+                _ = cancel_token.cancelled() => {
+                    println!("\n\nFuzzing cancelled by user (Ctrl-C). Continuing to scans...");
+                    Ok(Vec::new())
+                }
+            };
+            
+            match fuzzing_result {
+                Ok(found_subdomains) => {
+                    if !found_subdomains.is_empty() {
+                        println!("Found {} valid subdomains:", found_subdomains.len());
+                        for d in &found_subdomains {
+                            println!("{}", d);
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Fuzzing error: {}", e);
+                }
             }
         }
     }
     
     // Pass scan targets (filtered IPs only) to scanner for actual execution
-    scanner::run_scans(&scan_targets, &args.output_dir, false, args.verbose, args.all_formats).await?;
+    scanner::run_scans(&scan_targets, &args.output_dir, false, args.verbose, args.all_formats, args.yes_all).await?;
     
     Ok(())
 }
