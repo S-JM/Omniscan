@@ -7,6 +7,7 @@ use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
 
 use crate::target::Target;
 use crate::utils;
+use tokio_util::sync::CancellationToken;
 
 /// Performs subdomain fuzzing on Domain targets.
 ///
@@ -18,6 +19,7 @@ pub async fn fuzz_subdomains(
     wordlist_path: &str,
     output_dir: &str,
     verbose: bool,
+    cancel_token: CancellationToken,
 ) -> Result<Vec<String>> {
     if verbose {
         eprintln!("[VERBOSE] Initializing subdomain fuzzer");
@@ -90,6 +92,12 @@ pub async fn fuzz_subdomains(
     println!("Starting fuzzing: {} total subdomain checks", total_checks);
 
     while let Some(result) = stream.next().await {
+        // Check for cancellation
+        if cancel_token.is_cancelled() {
+            println!("\n\nFuzzing cancelled. Returning partial results...");
+            break;
+        }
+        
         checked += 1;
 
         // Print status update every 5 seconds (on same line)

@@ -16,7 +16,7 @@ use crate::target::Target;
 /// Only the final scan saves output to files.
 ///
 /// Returns a vector of (IP, port) tuples representing discovered SSL/TLS services.
-pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verbose: bool, all_formats: bool, _testssl: bool) -> Result<Vec<(String, u16)>> {
+pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verbose: bool, all_formats: bool, _testssl: bool, yes_all: bool) -> Result<Vec<(String, u16)>> {
     if verbose {
         eprintln!("[VERBOSE] Starting scan orchestration, dry_run={}", dry_run);
         eprintln!("[VERBOSE] Output format: {}", if all_formats { "all formats (-oA)" } else { "XML only (-oX)" });
@@ -102,22 +102,28 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
     if scan_targets.is_empty() {
         println!("No alive hosts found.");
         
-        // Ask user if they want to continue with -Pn (skip host discovery)
-        use std::io::{self, Write};
-        print!("No hosts responded to ping. Continue scanning with -Pn (treat all hosts as online)? [y/N]: ");
-        io::stdout().flush()?;
-        
-        let mut response = String::new();
-        io::stdin().read_line(&mut response)?;
-        let response = response.trim().to_lowercase();
-        
-        if response == "y" || response == "yes" {
-            println!("Continuing with -Pn flag...");
+        // Ask user if they want to continue with -Pn (skip host discovery), or auto-continue if yes_all
+        if yes_all {
+            println!("No hosts responded to ping. Continuing with -Pn (--yes-all)...");
             scan_targets = target_strings.clone();
             use_pn = true;
         } else {
-            println!("Exiting.");
-            return Ok(Vec::new());
+            use std::io::{self, Write};
+            print!("No hosts responded to ping. Continue scanning with -Pn (treat all hosts as online)? [y/N]: ");
+            io::stdout().flush()?;
+            
+            let mut response = String::new();
+            io::stdin().read_line(&mut response)?;
+            let response = response.trim().to_lowercase();
+            
+            if response == "y" || response == "yes" {
+                println!("Continuing with -Pn flag...");
+                scan_targets = target_strings.clone();
+                use_pn = true;
+            } else {
+                println!("Exiting.");
+                return Ok(Vec::new());
+            }
         }
     } else {
         println!("{}", "-".repeat(70));
@@ -144,7 +150,7 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
     let tcp_host_ports = parse_ports_per_host_from_gnmap(&tcp_output)?;
     
     // Perform evasion rescans if any hosts have ≤1 ports
-    let evasion_ports = perform_evasion_rescans(&tcp_host_ports, use_pn, output_dir, all_formats).await?;
+    let evasion_ports = perform_evasion_rescans(&tcp_host_ports, use_pn, output_dir, all_formats, yes_all).await?;
     
     // Merge evasion-discovered ports into tcp_host_ports for final scan
     let mut combined_tcp_host_ports = tcp_host_ports.clone();
@@ -247,6 +253,7 @@ async fn perform_evasion_rescans(
     use_pn: bool,
     output_dir: &str,
     all_formats: bool,
+    yes_all: bool,
 ) -> Result<std::collections::HashMap<String, Vec<String>>> {
     use std::collections::HashMap;
     use std::io::{self, Write};
@@ -280,7 +287,7 @@ async fn perform_evasion_rescans(
     println!("Hosts: {:?}", low_port_hosts);
     println!("{}", "-".repeat(70));
     
-    let mut yes_to_all = false;
+    let mut yes_to_all = yes_all;
 
     for host in &low_port_hosts {
         let current_ports = host_ports.get(host).map(|p| p.len()).unwrap_or(0);
