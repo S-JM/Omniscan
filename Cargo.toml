@@ -4,13 +4,13 @@ version = "0.3.0"
 edition = "2021"
 
 [dependencies]
-clap = { version = "4.4", features = ["derive"] }
-tokio = { version = "1.34", features = ["full", "signal"] }
+clap = { version = "4.5", features = ["derive"] }
+tokio = { version = "1.42", features = ["full", "signal"] }
 anyhow = "1.0"
 ipnetwork = "0.20"
 hickory-resolver = "0.24"
 futures = "0.3"
-indicatif = "0.17"
-tempfile = "3.8"
+indicatif = "0.18"
+tempfile = "3.14"
 tokio-util = "0.7"
 colored = "2.0"
