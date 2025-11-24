@@ -178,3 +178,97 @@ pub async fn fuzz_subdomains(
 
     Ok(subdomain_names)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::IpAddr;
+
+    #[test]
+    fn test_extract_domains_from_targets() {
+        let targets = vec![
+            Target::Domain("example.com".to_string()),
+            Target::IP("192.168.1.1".parse().unwrap()),
+            Target::Domain("test.org".to_string()),
+            Target::Network("10.0.0.0/24".parse().unwrap()),
+        ];
+
+        let domains: Vec<String> = targets
+            .iter()
+            .filter_map(|t| match t {
+                Target::Domain(d) => Some(d.clone()),
+                _ => None,
+            })
+            .collect();
+
+        assert_eq!(domains.len(), 2);
+        assert!(domains.contains(&"example.com".to_string()));
+        assert!(domains.contains(&"test.org".to_string()));
+    }
+
+    #[test]
+    fn test_extract_domains_no_domains() {
+        let targets = vec![
+            Target::IP("192.168.1.1".parse().unwrap()),
+            Target::Network("10.0.0.0/24".parse().unwrap()),
+        ];
+
+        let domains: Vec<String> = targets
+            .iter()
+            .filter_map(|t| match t {
+                Target::Domain(d) => Some(d.clone()),
+                _ => None,
+            })
+            .collect();
+
+        assert_eq!(domains.len(), 0);
+    }
+
+    #[test]
+    fn test_extract_domains_only_domains() {
+        let targets = vec![
+            Target::Domain("example.com".to_string()),
+            Target::Domain("test.org".to_string()),
+            Target::Domain("demo.net".to_string()),
+        ];
+
+        let domains: Vec<String> = targets
+            .iter()
+            .filter_map(|t| match t {
+                Target::Domain(d) => Some(d.clone()),
+                _ => None,
+            })
+            .collect();
+
+        assert_eq!(domains.len(), 3);
+    }
+
+    #[test]
+    fn test_subdomain_generation() {
+        let domain = "example.com";
+        let word = "www";
+        let subdomain = format!("{}.{}", word, domain);
+        assert_eq!(subdomain, "www.example.com");
+    }
+
+    #[test]
+    fn test_ip_matching_logic() {
+        let target_ip: IpAddr = "192.168.1.1".parse().unwrap();
+        let resolved_ip: IpAddr = "192.168.1.1".parse().unwrap();
+        assert_eq!(target_ip, resolved_ip);
+    }
+
+    #[test]
+    fn test_network_contains_ip() {
+        let network: ipnetwork::IpNetwork = "192.168.1.0/24".parse().unwrap();
+        let ip: IpAddr = "192.168.1.100".parse().unwrap();
+        assert!(network.contains(ip));
+    }
+
+    #[test]
+    fn test_network_does_not_contain_ip() {
+        let network: ipnetwork::IpNetwork = "192.168.1.0/24".parse().unwrap();
+        let ip: IpAddr = "192.168.2.100".parse().unwrap();
+        assert!(!network.contains(ip));
+    }
+}

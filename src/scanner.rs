@@ -547,3 +547,100 @@ fn build_command(
     
     cmd_parts.join(" ")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_alive_hosts() {
+        let gnmap_output = "Host: 192.168.1.1 ()\tStatus: Up\nHost: 192.168.1.2 ()\tStatus: Down\nHost: 192.168.1.3 ()\tStatus: Up\n";
+        let hosts = parse_alive_hosts(gnmap_output).unwrap();
+        assert_eq!(hosts.len(), 2);
+        assert_eq!(hosts[0], "192.168.1.1");
+        assert_eq!(hosts[1], "192.168.1.3");
+    }
+
+    #[test]
+    fn test_parse_alive_hosts_empty() {
+        let gnmap_output = "";
+        let hosts = parse_alive_hosts(gnmap_output).unwrap();
+        assert_eq!(hosts.len(), 0);
+    }
+
+    #[test]
+    fn test_parse_alive_hosts_all_down() {
+        let gnmap_output = "Host: 192.168.1.1 ()\tStatus: Down\nHost: 192.168.1.2 ()\tStatus: Down\n";
+        let hosts = parse_alive_hosts(gnmap_output).unwrap();
+        assert_eq!(hosts.len(), 0);
+    }
+
+    #[test]
+    fn test_parse_ports_from_gnmap() {
+        let gnmap_output = "Host: 192.168.1.1 ()\tPorts: 22/open/tcp//ssh///, 80/open/tcp//http///, 443/open/tcp//https///\n";
+        let ports = parse_ports_from_gnmap(gnmap_output).unwrap();
+        assert_eq!(ports.len(), 3);
+        assert!(ports.contains(&"22".to_string()));
+        assert!(ports.contains(&"80".to_string()));
+        assert!(ports.contains(&"443".to_string()));
+    }
+
+    #[test]
+    fn test_parse_ports_from_gnmap_with_closed_ports() {
+        let gnmap_output = "Host: 192.168.1.1 ()\tPorts: 22/open/tcp//ssh///, 23/closed/tcp//telnet///, 80/open/tcp//http///\n";
+        let ports = parse_ports_from_gnmap(gnmap_output).unwrap();
+        assert_eq!(ports.len(), 2); // Only open ports
+        assert!(ports.contains(&"22".to_string()));
+        assert!(ports.contains(&"80".to_string()));
+        assert!(!ports.contains(&"23".to_string())); // Closed port not included
+    }
+
+    #[test]
+    fn test_parse_ports_from_gnmap_no_duplicates() {
+        let gnmap_output = "Host: 192.168.1.1 ()\tPorts: 80/open/tcp//http///\nHost: 192.168.1.2 ()\tPorts: 80/open/tcp//http///\n";
+        let ports = parse_ports_from_gnmap(gnmap_output).unwrap();
+        assert_eq!(ports.len(), 1); // No duplicates
+        assert_eq!(ports[0], "80");
+    }
+
+    #[test]
+    fn test_parse_ports_from_gnmap_empty() {
+        let gnmap_output = "";
+        let ports = parse_ports_from_gnmap(gnmap_output).unwrap();
+        assert_eq!(ports.len(), 0);
+    }
+
+    #[test]
+    fn test_parse_ports_per_host_from_gnmap() {
+        let gnmap_output = "Host: 192.168.1.1 ()\tPorts: 22/open/tcp//ssh///, 80/open/tcp//http///\nHost: 192.168.1.2 ()\tPorts: 443/open/tcp//https///\n";
+        let host_ports = parse_ports_per_host_from_gnmap(gnmap_output).unwrap();
+        
+        assert_eq!(host_ports.len(), 2);
+        
+        let host1_ports = host_ports.get("192.168.1.1").unwrap();
+        assert_eq!(host1_ports.len(), 2);
+        assert!(host1_ports.contains(&"22".to_string()));
+        assert!(host1_ports.contains(&"80".to_string()));
+        
+        let host2_ports = host_ports.get("192.168.1.2").unwrap();
+        assert_eq!(host2_ports.len(), 1);
+        assert!(host2_ports.contains(&"443".to_string()));
+    }
+
+    #[test]
+    fn test_parse_ports_per_host_no_ports() {
+        let gnmap_output = "Host: 192.168.1.1 ()\tStatus: Up\n";
+        let host_ports = parse_ports_per_host_from_gnmap(gnmap_output).unwrap();
+        
+        assert_eq!(host_ports.len(), 1);
+        let ports = host_ports.get("192.168.1.1").unwrap();
+        assert_eq!(ports.len(), 0);
+    }
+
+    #[test]
+    fn test_parse_ports_per_host_empty() {
+        let gnmap_output = "";
+        let host_ports = parse_ports_per_host_from_gnmap(gnmap_output).unwrap();
+        assert_eq!(host_ports.len(), 0);
+    }
+}

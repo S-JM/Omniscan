@@ -165,3 +165,56 @@ pub async fn run_testssl_scans(
     
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_ssl_port_https() {
+        assert!(is_ssl_port(443));
+    }
+
+    #[test]
+    fn test_is_ssl_port_alternate_https() {
+        assert!(is_ssl_port(8443));
+        assert!(is_ssl_port(9443));
+        assert!(is_ssl_port(10443));
+    }
+
+    #[test]
+    fn test_is_ssl_port_ldaps() {
+        assert!(is_ssl_port(636));
+    }
+
+    #[test]
+    fn test_is_ssl_port_imaps() {
+        assert!(is_ssl_port(993));
+    }
+
+    #[test]
+    fn test_is_ssl_port_pop3s() {
+        assert!(is_ssl_port(995));
+    }
+
+    #[test]
+    fn test_is_ssl_port_smtps() {
+        assert!(is_ssl_port(465));
+    }
+
+    #[test]
+    fn test_is_ssl_port_non_ssl() {
+        assert!(!is_ssl_port(80));  // HTTP
+        assert!(!is_ssl_port(22));  // SSH
+        assert!(!is_ssl_port(21));  // FTP
+        assert!(!is_ssl_port(25));  // SMTP
+        assert!(!is_ssl_port(3306)); // MySQL
+    }
+
+    #[test]
+    fn test_is_ssl_port_edge_cases() {
+        assert!(!is_ssl_port(0));
+        assert!(!is_ssl_port(1));
+        assert!(!is_ssl_port(65535));
+    }
+}
