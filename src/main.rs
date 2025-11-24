@@ -101,57 +101,11 @@ async fn main() -> Result<()> {
         .collect();
 
     // Resolve domain names and filter to only those resolving to explicit IPs
-    let mut scan_targets: Vec<target::Target> = explicit_ips.clone();
-    
-    for t in &targets {
-        if let target::Target::Domain(domain) = t {
-            // Resolve domain
-            use hickory_resolver::TokioAsyncResolver;
-            use hickory_resolver::config::{ResolverConfig, ResolverOpts};
-            
-            let resolver = TokioAsyncResolver::tokio(ResolverConfig::google(), ResolverOpts::default());
-            match resolver.lookup_ip(domain.as_str()).await {
-                Ok(response) => {
-                    let resolved_ips: Vec<std::net::IpAddr> = response.iter().collect();
-                    println!("Domain {} resolves to: {:?}", domain, resolved_ips);
-                    
-                    // Check if any resolved IP matches explicit targets
-                    for resolved_ip in resolved_ips {
-                        let mut matches_explicit = false;
-                        for explicit in &explicit_ips {
-                            match explicit {
-                                target::Target::IP(ip) => {
-                                    if &resolved_ip == ip {
-                                        matches_explicit = true;
-                                        break;
-                                    }
-                                }
-                                target::Target::Network(network) => {
-                                    if network.contains(resolved_ip) {
-                                        matches_explicit = true;
-                                        break;
-                                    }
-                                }
-                                _ => {}
-                            }
-                        }
-                        
-                        if matches_explicit {
-                            println!("  -> {} is in explicit target list, will scan", resolved_ip);
-                            scan_targets.push(target::Target::IP(resolved_ip));
-                        } else {
-                            println!("  -> {} is NOT in explicit target list, skipping", resolved_ip);
-                        }
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Failed to resolve domain {}: {}", domain, e);
-                }
-            }
-        }
-    }
+    let (mut scan_targets, domain_names) = target::resolve_targets(&targets, &explicit_ips, args.verbose).await?;
+
 
     println!("\nFinal scan targets: {} IPs/CIDRs", scan_targets.len());
+
 
 
     // Always show a preview of what will be done
@@ -162,47 +116,31 @@ async fn main() -> Result<()> {
     
     // Show fuzzing preview if applicable
     if args.wordlist.is_some() {
-        let domain_targets: Vec<String> = targets
-            .iter()
-            .filter_map(|t| match t {
-                target::Target::Domain(d) => Some(d.clone()),
-                _ => None,
-            })
-            .collect();
-        
-        if !domain_targets.is_empty() {
+        if !domain_names.is_empty() {
             println!("\n{}", "# Subdomain Fuzzing".blue().bold());
             println!("Wordlist: {}", args.wordlist.as_ref().unwrap());
-            println!("Domains to fuzz: {:?}", domain_targets);
+            println!("Domains to fuzz: {:?}", domain_names);
         }
     }
     
     // Show zone transfer preview if applicable
-    let domain_targets: Vec<String> = targets
-        .iter()
-        .filter_map(|t| match t {
-            target::Target::Domain(d) => Some(d.clone()),
-            _ => None,
-        })
-        .collect();
-    
-    if !domain_targets.is_empty() {
+    if !domain_names.is_empty() {
         println!("\n{}", "# DNS Zone Transfer".blue().bold());
         if args.zone_transfer_only {
-            println!("Will attempt zone transfers on {} domain(s) (--zone-transfer-only)", domain_targets.len());
+            println!("Will attempt zone transfers on {} domain(s) (--zone-transfer-only)", domain_names.len());
         } else {
-            println!("Will attempt zone transfers on {} domain(s)", domain_targets.len());
+            println!("Will attempt zone transfers on {} domain(s)", domain_names.len());
         }
-        println!("Domains: {:?}", domain_targets);
+        println!("Domains: {:?}", domain_names);
     }
     
     // Show email verification preview if applicable
-    if !domain_targets.is_empty() {
+    if !domain_names.is_empty() {
         println!("\n{}", "# Email DNS Verification".blue().bold());
         if args.email_verification_only {
-            println!("Will verify email DNS records for {} domain(s) (--email-verification-only)", domain_targets.len());
+            println!("Will verify email DNS records for {} domain(s) (--email-verification-only)", domain_names.len());
         } else {
-            println!("Will verify email DNS records for {} domain(s)", domain_targets.len());
+            println!("Will verify email DNS records for {} domain(s)", domain_names.len());
         }
         println!("Checks: SPF, DMARC, DKIM");
     }
@@ -275,8 +213,8 @@ async fn main() -> Result<()> {
     println!("{}", "=".repeat(70).green().bold());
     
     // Run zone transfer if we have domains (unless skipped)
-    if !domain_targets.is_empty() && !args.testssl_only {
-        match zone_transfer::run_zone_transfers(&domain_targets, &args.output_dir, args.verbose).await {
+    if !domain_names.is_empty() && !args.testssl_only {
+        match zone_transfer::run_zone_transfers(&domain_names, &args.output_dir, args.verbose).await {
             Ok(discovered) => {
                 if !discovered.is_empty() {
                     println!("Adding {} discovered hosts from zone transfer to scan targets...", discovered.len());
@@ -303,8 +241,8 @@ async fn main() -> Result<()> {
     }
     
     // Run email verification if we have domains (unless skipped)
-    if !domain_targets.is_empty() && !args.testssl_only {
-        if let Err(e) = email_verification::run_email_verification(&domain_targets, &args.output_dir, args.verbose).await {
+    if !domain_names.is_empty() && !args.testssl_only {
+        if let Err(e) = email_verification::run_email_verification(&domain_names, &args.output_dir, args.verbose).await {
             eprintln!("Email verification error: {}", e);
         }
     }
