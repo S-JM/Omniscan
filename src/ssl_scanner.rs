@@ -27,7 +27,7 @@ pub async fn run_testssl(
     let target_port = format!("{}:{}", target, port_str);
     
     // Sanitize target name for filename
-    let safe_target = target.replace(":", "_").replace("/", "_");
+    let safe_target = crate::utils::sanitize_for_filename(target);
     let output_file = format!("{}/{}.json", output_dir, safe_target);
     
     let mut cmd = Command::new("bash");

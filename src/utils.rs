@@ -19,3 +19,24 @@ where
     Ok(result)
 }
 
+/// Sanitizes a domain or target name for use in filenames.
+///
+/// Replaces characters that are invalid or problematic in filenames
+/// (colons and slashes) with underscores.
+///
+/// # Arguments
+/// * `input` - The string to sanitize (domain, IP, or target name)
+///
+/// # Returns
+/// A sanitized string safe for use in filenames
+///
+/// # Examples
+/// ```
+/// let safe = sanitize_for_filename("example.com:443");
+/// assert_eq!(safe, "example.com_443");
+/// ```
+pub fn sanitize_for_filename(input: &str) -> String {
+    input.replace(":", "_").replace("/", "_")
+}
+
+

@@ -198,7 +198,7 @@ fn save_zone_transfer_results(
         fs::create_dir_all(output_dir).context("Failed to create output directory")?;
     }
     
-    let safe_domain = domain.replace(":", "_").replace("/", "_");
+    let safe_domain = crate::utils::sanitize_for_filename(domain);
     let output_file = format!("{}/zone_transfer_{}.txt", output_dir, safe_domain);
     
     let mut file = fs::File::create(&output_file)

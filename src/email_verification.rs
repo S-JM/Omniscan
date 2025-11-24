@@ -654,7 +654,7 @@ fn save_email_verification_results(
         fs::create_dir_all(output_dir).context("Failed to create output directory")?;
     }
     
-    let safe_domain = result.domain.replace(":", "_").replace("/", "_");
+    let safe_domain = crate::utils::sanitize_for_filename(&result.domain);
     let output_file = format!("{}/email_verification_{}.txt", output_dir, safe_domain);
     
     let mut file = fs::File::create(&output_file)
