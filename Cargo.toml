@@ -8,7 +8,7 @@ clap = { version = "4.4", features = ["derive"] }
 tokio = { version = "1.34", features = ["full", "signal"] }
 anyhow = "1.0"
 ipnetwork = "0.20"
-trust-dns-resolver = "0.23"
+hickory-resolver = "0.24"
 futures = "0.3"
 indicatif = "0.17"
 tempfile = "3.8"

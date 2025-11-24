@@ -2,9 +2,9 @@
 use anyhow::{Context, Result};
 use std::collections::HashSet;
 use std::net::IpAddr;
-use trust_dns_resolver::TokioAsyncResolver;
-use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
-use trust_dns_resolver::proto::rr::{RecordType, RData};
+use hickory_resolver::TokioAsyncResolver;
+use hickory_resolver::config::{ResolverConfig, ResolverOpts};
+use hickory_resolver::proto::rr::{RecordType, RData};
 use colored::*;
 
 /// Discovered DNS record from zone transfer
@@ -86,13 +86,13 @@ pub async fn attempt_zone_transfer(
         let ns_ip = ns_ips[0];
         
         // Create a custom resolver pointing to this specific nameserver
-        use trust_dns_resolver::config::NameServerConfig;
+        use hickory_resolver::config::NameServerConfig;
         use std::net::SocketAddr;
         
         let socket_addr = SocketAddr::new(ns_ip, 53);
         let name_server = NameServerConfig {
             socket_addr,
-            protocol: trust_dns_resolver::config::Protocol::Tcp,
+            protocol: hickory_resolver::config::Protocol::Tcp,
             tls_dns_name: None,
             trust_negative_responses: false,
             bind_addr: None,

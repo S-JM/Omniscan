@@ -1,7 +1,7 @@
 /// Email DNS verification module for SPF, DMARC, and DKIM records
 use anyhow::{Context, Result};
-use trust_dns_resolver::TokioAsyncResolver;
-use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
+use hickory_resolver::TokioAsyncResolver;
+use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 use colored::*;
 
 /// Email verification findings

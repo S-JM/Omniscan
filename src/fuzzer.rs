@@ -2,8 +2,8 @@ use anyhow::{Context, Result};
 use futures::stream::{self, StreamExt};
 use std::net::IpAddr;
 use std::sync::Arc;
-use trust_dns_resolver::TokioAsyncResolver;
-use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
+use hickory_resolver::TokioAsyncResolver;
+use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 
 use crate::target::Target;
 use crate::utils;

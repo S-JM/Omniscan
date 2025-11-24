@@ -106,8 +106,8 @@ async fn main() -> Result<()> {
     for t in &targets {
         if let target::Target::Domain(domain) = t {
             // Resolve domain
-            use trust_dns_resolver::TokioAsyncResolver;
-            use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
+            use hickory_resolver::TokioAsyncResolver;
+            use hickory_resolver::config::{ResolverConfig, ResolverOpts};
             
             let resolver = TokioAsyncResolver::tokio(ResolverConfig::google(), ResolverOpts::default());
             match resolver.lookup_ip(domain.as_str()).await {
