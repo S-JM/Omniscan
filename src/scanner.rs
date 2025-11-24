@@ -17,7 +17,7 @@ use colored::*;
 /// Only the final scan saves output to files.
 ///
 /// Returns a vector of (IP, port) tuples representing discovered SSL/TLS services.
-pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verbose: bool, all_formats: bool, _testssl: bool, yes_all: bool) -> Result<Vec<(String, u16)>> {
+pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verbose: bool, all_formats: bool, yes_all: bool) -> Result<Vec<(String, u16)>> {
     if verbose {
         eprintln!("[VERBOSE] Starting scan orchestration, dry_run={}", dry_run);
         eprintln!("[VERBOSE] Output format: {}", if all_formats { "all formats (-oA)" } else { "XML only (-oX)" });

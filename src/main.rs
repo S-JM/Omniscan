@@ -209,7 +209,7 @@ async fn main() -> Result<()> {
     
     // Show scan preview by calling run_scans in dry-run mode
     if !args.testssl_only && !args.zone_transfer_only && !args.email_verification_only {
-        scanner::run_scans(&scan_targets, &args.output_dir, true, args.verbose, args.all_formats, args.testssl, args.yes_all).await?;
+        scanner::run_scans(&scan_targets, &args.output_dir, true, args.verbose, args.all_formats, args.yes_all).await?;
     } else if args.email_verification_only {
         println!("\n{}", "# Nmap Scans".blue().bold());
         println!("{}", "Skipped (--email-verification-only)".yellow());
@@ -232,7 +232,7 @@ async fn main() -> Result<()> {
         println!("\n{}", "# TestSSL.sh Scan".blue().bold());
         println!("{}", "Skipped (--zone-transfer-only)".yellow());
     } else if args.testssl_only {
-        scanner::run_scans(&scan_targets, &args.output_dir, true, args.verbose, args.all_formats, args.testssl, args.yes_all).await?;
+        scanner::run_scans(&scan_targets, &args.output_dir, true, args.verbose, args.all_formats, args.yes_all).await?;
     } else {
         println!("\n{}", "# Nmap Scans".blue().bold());
         println!("{}", "Skipped (--testssl-only)".yellow());
@@ -367,7 +367,7 @@ async fn main() -> Result<()> {
     // Pass scan targets (filtered IPs only) to scanner for actual execution
     // If --testssl-only is set, skip Nmap scans
     let ssl_info = if !args.testssl_only {
-        scanner::run_scans(&scan_targets, &args.output_dir, false, args.verbose, args.all_formats, args.testssl, args.yes_all).await?
+        scanner::run_scans(&scan_targets, &args.output_dir, false, args.verbose, args.all_formats, args.yes_all).await?
     } else {
         println!("\n{}", "=".repeat(70).yellow());
         println!("{}", "  NMAP SCANS - SKIPPED (--testssl-only)".yellow().bold());
