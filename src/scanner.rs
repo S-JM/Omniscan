@@ -227,11 +227,15 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
         
         // This is the ONLY scan that saves to file
         // Iterate over each host to save output with the IP as the filename
-        for host in scan_targets {
+        for host in &scan_targets {
             println!("Scanning host: {}", host);
             let single_target = vec![host.clone()];
             run_nmap_scan("Script Scan", &final_args, &single_target, output_dir, Some(&host), all_formats).await?;
         }
+        
+        // Also create a combined XML with all targets
+        println!("\nCreating combined scan of all targets...");
+        run_nmap_scan("Combined Scan", &final_args, &scan_targets, output_dir, Some("all_targets"), all_formats).await?;
     } else {
         println!("\n{}", "=".repeat(70).yellow());
         println!("{}", "  SERVICE & SCRIPT SCAN - SKIPPED".yellow().bold());
