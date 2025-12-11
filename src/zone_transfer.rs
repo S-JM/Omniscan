@@ -236,11 +236,25 @@ pub async fn run_zone_transfers(
     let mut all_discovered = Vec::new();
     
     for domain in domains {
-        let (records, discovered) = attempt_zone_transfer(domain, output_dir, verbose).await?;
-        
-        if !records.is_empty() {
-            println!("{} Discovered {} unique hosts/IPs from zone transfer", "✓".green(), discovered.len());
-            all_discovered.extend(discovered);
+        // Allow skipping individual domains with Ctrl+C
+        let result = tokio::select! {
+            res = attempt_zone_transfer(domain, output_dir, verbose) => res,
+            _ = tokio::signal::ctrl_c() => {
+                println!("\n{} {}", "Skipping zone transfer for".yellow(), domain);
+                continue;
+            }
+        };
+
+        match result {
+            Ok((records, discovered)) => {
+                if !records.is_empty() {
+                    println!("{} Discovered {} unique hosts/IPs from zone transfer", "✓".green(), discovered.len());
+                    all_discovered.extend(discovered);
+                }
+            },
+            Err(e) => {
+                eprintln!("Zone transfer failed for {}: {}", domain, e);
+            }
         }
         
         println!();

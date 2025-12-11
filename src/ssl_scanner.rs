@@ -140,7 +140,16 @@ pub async fn run_testssl_scans(
     if !domains.is_empty() {
         println!("\nScanning {} domain(s):", domains.len());
         for domain in domains {
-            if let Err(e) = run_testssl(domain, None, output_dir, &testssl_path, &openssl_path, verbose).await {
+            // Allow skipping individual targets with Ctrl+C
+            let result = tokio::select! {
+                res = run_testssl(domain, None, output_dir, &testssl_path, &openssl_path, verbose) => res,
+                _ = tokio::signal::ctrl_c() => {
+                    println!("\n{} {}", "Skipping SSL scan for".yellow(), domain);
+                    continue;
+                }
+            };
+
+            if let Err(e) = result {
                 eprintln!("{} {}: {}", "Failed to scan".red(), domain, e);
             }
         }
@@ -150,8 +159,19 @@ pub async fn run_testssl_scans(
     if !ip_ssl_ports.is_empty() {
         println!("\nScanning {} IP:port pair(s) with SSL/TLS:", ip_ssl_ports.len());
         for (ip, port) in ip_ssl_ports {
-            if let Err(e) = run_testssl(ip, Some(*port), output_dir, &testssl_path, &openssl_path, verbose).await {
-                eprintln!("{} {}:{}: {}", "Failed to scan".red(), ip, port, e);
+            let target_display = format!("{}:{}", ip, port);
+            
+            // Allow skipping individual targets with Ctrl+C
+            let result = tokio::select! {
+                res = run_testssl(ip, Some(*port), output_dir, &testssl_path, &openssl_path, verbose) => res,
+                _ = tokio::signal::ctrl_c() => {
+                    println!("\n{} {}", "Skipping SSL scan for".yellow(), target_display);
+                    continue;
+                }
+            };
+
+            if let Err(e) = result {
+                eprintln!("{} {}: {}", "Failed to scan".red(), target_display, e);
             }
         }
     }

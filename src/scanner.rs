@@ -17,10 +17,25 @@ use colored::*;
 /// Only the final scan saves output to files.
 ///
 /// Returns a vector of (IP, port) tuples representing discovered SSL/TLS services.
-pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verbose: bool, all_formats: bool, yes_all: bool) -> Result<Vec<(String, u16)>> {
+pub async fn run_scans(
+    targets: &[Target], 
+    output_dir: &str, 
+    dry_run: bool, 
+    verbose: bool, 
+    all_formats: bool, 
+    yes_all: bool,
+    custom_args: Option<&str>,
+    firewall_evasion: bool
+) -> Result<Vec<(String, u16)>> {
     if verbose {
         eprintln!("[VERBOSE] Starting scan orchestration, dry_run={}", dry_run);
         eprintln!("[VERBOSE] Output format: {}", if all_formats { "all formats (-oA)" } else { "XML only (-oX)" });
+        if let Some(args) = custom_args {
+            eprintln!("[VERBOSE] Custom Nmap args: {}", args);
+        }
+        if firewall_evasion {
+            eprintln!("[VERBOSE] Firewall evasion enabled");
+        }
     }
 
     // Convert targets to string list for Nmap
@@ -37,27 +52,41 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
 
     // If dry-run mode, build and print all commands without executing
     if dry_run {
-        // 1. Alive Host Discovery
-        let alive_cmd = build_command("nmap", &["-sn", "-PS21,22,23,25,80,113,443,3389", "-PA80,443", "-PE", "-PP", "-PU53,123,161", "-oG", "-"], &target_strings, output_dir, None);
-        println!("# Alive Host Discovery (Multiple Techniques)");
-        println!("# Using ICMP (echo, timestamp), TCP SYN/ACK, UDP ping");
-        println!("{}\n", alive_cmd);
-        
-        // 2. TCP Port Scan
-        let tcp_cmd = build_command("nmap", &["-p-", "-oG", "-"], &target_strings, output_dir, None);
-        println!("# TCP Port Scan (All Ports)");
-        println!("{}\n", tcp_cmd);
-        
-        // 3. UDP Port Scan
-        let udp_cmd = build_command("nmap", &["-sU", "--top-ports", "1000", "-oG", "-"], &target_strings, output_dir, None);
-        println!("# UDP Port Scan (Top 1000)");
-        println!("{}\n", udp_cmd);
-        
-        // 4. Service & Script Scan (example with placeholder ports)
-        println!("# Service & Script Scan (will run for each alive host with discovered ports)");
-        println!("# Example for a single host with mixed TCP and UDP ports:");
-        let script_cmd = build_command("nmap", &["-sV", "-sC", "-sS", "-sU", "-p", "T:80,443,U:53,123"], &["<HOST>"], output_dir, Some("<HOST>"));
-        println!("{}\n", script_cmd);
+        if let Some(custom) = custom_args {
+            println!("\n{}", "# Custom Scan".blue().bold());
+            let mut args: Vec<&str> = custom.split_whitespace().collect();
+            if firewall_evasion {
+                args.extend_from_slice(&["-f", "--mtu", "24", "--source-port", "53", "--data-length", "30"]);
+            }
+            let cmd = build_command("nmap", &args, &target_strings, output_dir, None);
+            println!("{}\n", cmd);
+        } else {
+            // 1. Alive Host Discovery
+            let alive_cmd = build_command("nmap", &["-sn", "-PS21,22,23,25,80,113,443,3389", "-PA80,443", "-PE", "-PP", "-PU53,123,161", "-oG", "-"], &target_strings, output_dir, None);
+            println!("\n{}", "# Alive Host Discovery (Multiple Techniques)".blue().bold());
+            println!("# Using ICMP (echo, timestamp), TCP SYN/ACK, UDP ping");
+            println!("{}\n", alive_cmd);
+            
+            // 2. TCP Port Scan
+            let mut tcp_args = vec!["-p-", "-oG", "-"];
+            if firewall_evasion {
+                tcp_args.extend_from_slice(&["-f", "--mtu", "24", "--source-port", "53", "--data-length", "30"]);
+            }
+            let tcp_cmd = build_command("nmap", &tcp_args, &target_strings, output_dir, None);
+            println!("{}", "# TCP Port Scan (All Ports)".blue().bold());
+            println!("{}\n", tcp_cmd);
+            
+            // 3. UDP Port Scan
+            let udp_cmd = build_command("nmap", &["-sU", "--top-ports", "1000", "-oG", "-"], &target_strings, output_dir, None);
+            println!("{}", "# UDP Port Scan (Top 1000)".blue().bold());
+            println!("{}\n", udp_cmd);
+            
+            // 4. Service & Script Scan (example with placeholder ports)
+            println!("{}", "# Service & Script Scan (will run for each alive host with discovered ports)".blue().bold());
+            println!("# Example for a single host with mixed TCP and UDP ports:");
+            let script_cmd = build_command("nmap", &["-sV", "-sC", "-sS", "-sU", "-p", "T:80,443,U:53,123"], &["<HOST>"], output_dir, Some("<HOST>"));
+            println!("{}\n", script_cmd);
+        }
         
         return Ok(Vec::new());
     }
@@ -65,6 +94,96 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
     // Ensure output directory exists
     if !std::path::Path::new(output_dir).exists() {
         std::fs::create_dir_all(output_dir).context("Failed to create output directory")?;
+    }
+
+    // If custom args are provided, run a single custom scan and return
+    if let Some(custom) = custom_args {
+        println!("\n{}", "=".repeat(70).blue().bold());
+        println!("{}", "  CUSTOM NMAP SCAN".blue().bold());
+        println!("{}", "=".repeat(70).blue().bold());
+        println!("Arguments: {}", custom);
+        
+        let mut args: Vec<&str> = custom.split_whitespace().collect();
+        
+        // Add evasion flags if requested
+        if firewall_evasion {
+            println!("Adding firewall evasion flags...");
+            args.extend_from_slice(&["-f", "--mtu", "24", "--source-port", "53", "--data-length", "30"]);
+        }
+        
+        // Ensure output format is set if not in custom args
+        // We force -oG - to parse output for subsequent steps
+        if !args.contains(&"-oG") {
+            args.extend_from_slice(&["-oG", "-"]);
+        }
+
+        let custom_output = run_nmap_scan("Custom Scan", &args, &target_strings, output_dir, Some("custom_scan"), all_formats).await?;
+        
+        // Parse ports from custom scan to feed into evasion/service scans
+        // We need to parse both TCP and UDP ports if possible, but parse_ports_per_host_from_gnmap handles mixed
+        let mut combined_tcp_host_ports = parse_ports_per_host_from_gnmap(&custom_output)?;
+        
+        // 2.5. Evasion Rescans (for hosts with ≤1 TCP port)
+        // Only run this if we haven't already applied evasion globally
+        if !firewall_evasion {
+            // Perform evasion rescans if any hosts have ≤1 ports
+            // Note: We assume custom scan was TCP-ish or at least produced open ports we can see
+            let evasion_ports = perform_evasion_rescans(&combined_tcp_host_ports, false, output_dir, all_formats, yes_all).await?;
+            
+            // Merge evasion-discovered ports
+            for (host, new_ports) in evasion_ports {
+                combined_tcp_host_ports.entry(host).or_insert_with(Vec::new).extend(new_ports);
+            }
+        }
+
+        // 4. Service & Script Scan (Default Scripts + Version)
+        // Collect all ports from combined_tcp_host_ports
+        let mut tcp_ports: Vec<String> = Vec::new();
+        let mut _udp_ports: Vec<String> = Vec::new();
+
+        for ports in combined_tcp_host_ports.values() {
+            for port in ports {
+                // Heuristic: if port string contains "udp", it's UDP, else assume TCP?
+                // parse_ports_per_host_from_gnmap currently returns just port numbers as strings.
+                // We need to update it to return protocol info or infer it.
+                // For now, let's assume the custom scan was TCP unless we see explicit UDP indicators in the output parsing
+                // But wait, parse_ports_per_host_from_gnmap strips protocol info.
+                // Let's update parse_ports_per_host_from_gnmap to return (port, protocol) tuples?
+                // Or just assume TCP for now as that's the common case for "custom scan followed by service scan".
+                if !tcp_ports.contains(port) {
+                    tcp_ports.push(port.clone());
+                }
+            }
+        }
+        
+        let mut combined_ports = String::new();
+        if !tcp_ports.is_empty() {
+            combined_ports.push_str("T:");
+            combined_ports.push_str(&tcp_ports.join(","));
+        }
+        // (UDP support in custom scan follow-up would require parsing protocol from gnmap)
+
+        if !combined_ports.is_empty() {
+            println!("\n{}", "=".repeat(70).blue().bold());
+            println!("{}", "  SERVICE & SCRIPT SCAN (Post-Custom)".blue().bold());
+            println!("{}", "=".repeat(70).blue().bold());
+            
+            let mut final_args = vec!["-sV", "-sC", "-O", "-Pn"];
+            final_args.push("-p");
+            final_args.push(&combined_ports);
+            
+            for host in &target_strings {
+                // Only scan hosts that were found alive/open in custom scan?
+                // For now, scan all original targets that have ports
+                if combined_tcp_host_ports.contains_key(host) && !combined_tcp_host_ports[host].is_empty() {
+                    println!("Scanning host: {}", host);
+                    let single_target = vec![host.clone()];
+                    run_nmap_scan("Script Scan", &final_args, &single_target, output_dir, Some(&host), all_formats).await?;
+                }
+            }
+        }
+
+        return Ok(Vec::new());
     }
 
     // 1. Alive Host Discovery
@@ -143,20 +262,34 @@ pub async fn run_scans(targets: &[Target], output_dir: &str, dry_run: bool, verb
     println!("{}", "-".repeat(70));
     // Always use -Pn for port scans since we've already done alive host discovery
     // OR if user explicitly requested -Pn mode
-    let tcp_args = vec!["-Pn", "-p-", "-oG", "-"];
+    let mut tcp_args = vec!["-Pn", "-p-", "-oG", "-"];
+    
+    // Apply firewall evasion if requested
+    if firewall_evasion {
+        println!("Applying firewall evasion techniques...");
+        tcp_args.extend_from_slice(&["-f", "--mtu", "24", "--source-port", "53", "--data-length", "30"]);
+    }
+
     let tcp_output = run_nmap_scan("TCP Scan", &tcp_args, &scan_targets, output_dir, None, all_formats).await?;
 
     // 2.5. Evasion Rescans (for hosts with ≤1 TCP port)
-    // Parse ports per host to identify low-port hosts
+    // Only run this if we haven't already applied evasion globally
+    let mut combined_tcp_host_ports;
     let tcp_host_ports = parse_ports_per_host_from_gnmap(&tcp_output)?;
-    
-    // Perform evasion rescans if any hosts have ≤1 ports
-    let evasion_ports = perform_evasion_rescans(&tcp_host_ports, use_pn, output_dir, all_formats, yes_all).await?;
-    
-    // Merge evasion-discovered ports into tcp_host_ports for final scan
-    let mut combined_tcp_host_ports = tcp_host_ports.clone();
-    for (host, new_ports) in evasion_ports {
-        combined_tcp_host_ports.entry(host).or_insert_with(Vec::new).extend(new_ports);
+
+    if !firewall_evasion {
+        // Parse ports per host to identify low-port hosts
+        
+        // Perform evasion rescans if any hosts have ≤1 ports
+        let evasion_ports = perform_evasion_rescans(&tcp_host_ports, use_pn, output_dir, all_formats, yes_all).await?;
+        
+        // Merge evasion-discovered ports into tcp_host_ports for final scan
+        combined_tcp_host_ports = tcp_host_ports.clone();
+        for (host, new_ports) in evasion_ports {
+            combined_tcp_host_ports.entry(host).or_insert_with(Vec::new).extend(new_ports);
+        }
+    } else {
+        combined_tcp_host_ports = tcp_host_ports;
     }
 
     // 3. UDP Port Scan (Top 1000)

@@ -116,7 +116,5 @@ Embeds [testssl.sh](https://github.com/drwetter/testssl.sh) v3.0.4 (GPLv2) by Di
 
 MIT License. See [LICENSE](LICENSE).
 
-testssl.sh component: GPLv2.
-
 
 

@@ -6,6 +6,8 @@ use omniscan::fuzzer;
 use omniscan::utils;
 use omniscan::zone_transfer;
 use omniscan::email_verification;
+use omniscan::config::ScanConfig;
+use omniscan::interactive;
 use colored::*;
 
 #[derive(Parser, Debug)]
@@ -65,28 +67,105 @@ struct Args {
     email_verification_only: bool,
 }
 
+impl From<Args> for ScanConfig {
+    fn from(args: Args) -> Self {
+        let mut config = ScanConfig {
+            targets: args.targets,
+            output_dir: args.output_dir,
+            dry_run: args.dry_run,
+            verbose: args.verbose,
+            all_formats: args.all_formats,
+            yes_all: args.yes_all,
+            wordlist: args.wordlist,
+            strict_scope: true, // CLI always defaults to strict scope for backward compatibility
+            
+            // Initialize explicit flags based on CLI args
+            run_port_scan: false,
+            run_testssl: false,
+            run_fuzzing: false,
+            run_zone_transfer: false,
+            run_email_verification: false,
+
+            custom_nmap_args: None,
+            firewall_evasion: false,
+        };
+
+        // Logic to map CLI args to explicit flags
+        if args.testssl_only {
+            config.run_testssl = true;
+            // strict_scope is bypassed for testssl_only in the original logic, 
+            // but we'll keep it true here and handle the target selection logic in main.rs
+        } else if args.zone_transfer_only {
+            config.run_zone_transfer = true;
+        } else if args.email_verification_only {
+            config.run_email_verification = true;
+        } else {
+            // Default behavior (Nmap + Fuzzing + Zone Transfer + Email + TestSSL if requested)
+            // Wait, original behavior was:
+            // Nmap: Always unless *_only
+            // Fuzzing: Always unless skip_fuzzing or *_only
+            // Zone Transfer: Always unless *_only
+            // Email: Always unless *_only
+            // TestSSL: Only if --testssl is set
+            
+            config.run_port_scan = true;
+            config.run_zone_transfer = true;
+            config.run_email_verification = true;
+            
+            if !args.skip_fuzzing {
+                config.run_fuzzing = true;
+            }
+            
+            if args.testssl {
+                config.run_testssl = true;
+            }
+        }
+        
+        config
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args = Args::parse();
+    // Check if any arguments were provided
+    let has_args = std::env::args().len() > 1;
 
-    let mut all_targets_str = Vec::new();
+    let config = if has_args {
+        let args = Args::parse();
+        let mut config = ScanConfig::from(args);
+        
+        let args_ref = Args::parse(); // Re-parse to access input_file
+        if let Some(input_file) = args_ref.input_file {
+            let lines = utils::read_lines(&input_file)?;
+            config.targets.extend(lines);
+        }
+        
+        config
+    } else {
+        // No args, run interactive mode
+        match interactive::run_interactive_menu() {
+            Ok(c) => c,
+            Err(e) => {
+                // If error is due to interruption, handle it
+                if e.to_string().contains("interrupted") || e.to_string().contains("IO error") {
+                     println!("\n{}", "Interactive mode cancelled.".yellow());
+                     return Ok(());
+                }
+                return Err(e);
+            }
+        }
+    };
 
-    // Add targets from CLI args
-    all_targets_str.extend(args.targets);
+    run_scan(config).await
+}
 
-    // Add targets from input file
-    if let Some(input_file) = args.input_file {
-        let lines = utils::read_lines(&input_file)?;
-        all_targets_str.extend(lines);
-    }
-
-    if all_targets_str.is_empty() {
+async fn run_scan(config: ScanConfig) -> Result<()> {
+    if config.targets.is_empty() {
         eprintln!("{}", "No targets provided. Use --help for usage information.".red());
         return Ok(());
     }
 
-
-    let targets = target::parse_targets(all_targets_str)?;
+    let targets = target::parse_targets(config.targets.clone())?;
 
     println!("Parsed {} targets:", targets.len());
     for t in &targets {
@@ -101,100 +180,96 @@ async fn main() -> Result<()> {
         .collect();
 
     // Resolve domain names and filter to only those resolving to explicit IPs
-    let (mut scan_targets, domain_names) = target::resolve_targets(&targets, &explicit_ips, args.verbose).await?;
+    // Pass strict_scope from config
+    let (mut scan_targets, domain_names) = target::resolve_targets(&targets, &explicit_ips, config.verbose, config.strict_scope).await?;
 
 
     println!("\nFinal scan targets: {} IPs/CIDRs", scan_targets.len());
 
-
-
-    // Always show a preview of what will be done
     // Always show a preview of what will be done
     println!("\n{}", "=".repeat(70).blue().bold());
     println!("{}", "  PREVIEW: Commands that will be executed".blue().bold());
     println!("{}", "=".repeat(70).blue().bold());
     
     // Show fuzzing preview if applicable
-    if args.wordlist.is_some() {
+    if config.run_fuzzing && config.wordlist.is_some() {
         if !domain_names.is_empty() {
             println!("\n{}", "# Subdomain Fuzzing".blue().bold());
-            println!("Wordlist: {}", args.wordlist.as_ref().unwrap());
+            println!("Wordlist: {}", config.wordlist.as_ref().unwrap());
             println!("Domains to fuzz: {:?}", domain_names);
         }
+    } else if !config.run_fuzzing {
+        println!("\n{}", "# Subdomain Fuzzing".blue().bold());
+        println!("{}", "Skipped (Not selected)".yellow());
     }
     
     // Show zone transfer preview if applicable
-    if !domain_names.is_empty() {
-        println!("\n{}", "# DNS Zone Transfer".blue().bold());
-        if args.zone_transfer_only {
-            println!("Will attempt zone transfers on {} domain(s) (--zone-transfer-only)", domain_names.len());
-        } else {
+    if config.run_zone_transfer {
+        if !domain_names.is_empty() {
+            println!("\n{}", "# DNS Zone Transfer".blue().bold());
             println!("Will attempt zone transfers on {} domain(s)", domain_names.len());
+            println!("Domains: {:?}", domain_names);
         }
-        println!("Domains: {:?}", domain_names);
+    } else {
+        println!("\n{}", "# DNS Zone Transfer".blue().bold());
+        println!("{}", "Skipped (Not selected)".yellow());
     }
     
     // Show email verification preview if applicable
-    if !domain_names.is_empty() {
-        println!("\n{}", "# Email DNS Verification".blue().bold());
-        if args.email_verification_only {
-            println!("Will verify email DNS records for {} domain(s) (--email-verification-only)", domain_names.len());
-        } else {
+    if config.run_email_verification {
+        if !domain_names.is_empty() {
+            println!("\n{}", "# Email DNS Verification".blue().bold());
             println!("Will verify email DNS records for {} domain(s)", domain_names.len());
+            println!("Checks: SPF, DMARC, DKIM");
         }
-        println!("Checks: SPF, DMARC, DKIM");
+    } else {
+        println!("\n{}", "# Email DNS Verification".blue().bold());
+        println!("{}", "Skipped (Not selected)".yellow());
     }
     
-    // Show scan preview by calling run_scans in dry-run mode
-    if !args.testssl_only && !args.zone_transfer_only && !args.email_verification_only {
-        scanner::run_scans(&scan_targets, &args.output_dir, true, args.verbose, args.all_formats, args.yes_all).await?;
-    } else if args.email_verification_only {
-        println!("\n{}", "# Nmap Scans".blue().bold());
-        println!("{}", "Skipped (--email-verification-only)".yellow());
-        
-        println!("\n{}", "# Subdomain Fuzzing".blue().bold());
-        println!("{}", "Skipped (--email-verification-only)".yellow());
-        
-        println!("\n{}", "# DNS Zone Transfer".blue().bold());
-        println!("{}", "Skipped (--email-verification-only)".yellow());
-        
-        println!("\n{}", "# TestSSL.sh Scan".blue().bold());
-        println!("{}", "Skipped (--email-verification-only)".yellow());
-    } else if args.zone_transfer_only {
-        println!("\n{}", "# Nmap Scans".blue().bold());
-        println!("{}", "Skipped (--zone-transfer-only)".yellow());
-        
-        println!("\n{}", "# Subdomain Fuzzing".blue().bold());
-        println!("{}", "Skipped (--zone-transfer-only)".yellow());
-        
-        println!("\n{}", "# TestSSL.sh Scan".blue().bold());
-        println!("{}", "Skipped (--zone-transfer-only)".yellow());
-    } else if args.testssl_only {
-        scanner::run_scans(&scan_targets, &args.output_dir, true, args.verbose, args.all_formats, args.yes_all).await?;
+    // Show scan preview
+    if config.run_port_scan {
+        // Just show the header, the actual preview comes from scanner::run_scans dry run
+        // But we need to call it.
+        scanner::run_scans(
+            &scan_targets, 
+            &config.output_dir, 
+            true, 
+            config.verbose, 
+            config.all_formats, 
+            config.yes_all,
+            config.custom_nmap_args.as_deref(),
+            config.firewall_evasion
+        ).await?;
     } else {
         println!("\n{}", "# Nmap Scans".blue().bold());
-        println!("{}", "Skipped (--testssl-only)".yellow());
-        
+        println!("{}", "Skipped (Not selected)".yellow());
+    }
+
+    if config.run_testssl {
         println!("\n{}", "# TestSSL.sh Scan".blue().bold());
         println!("Will run testssl.sh on all provided targets (domains and IPs)");
-        if args.wordlist.is_some() {
+        if config.wordlist.is_some() && config.run_fuzzing {
             println!("And on any subdomains found via fuzzing");
         }
+    } else {
+        println!("\n{}", "# TestSSL.sh Scan".blue().bold());
+        println!("{}", "Skipped (Not selected)".yellow());
     }
     
     // If --dry-run flag is set, exit here
-    if args.dry_run {
+    if config.dry_run {
         return Ok(());
     }
     
     // Ask user for confirmation (unless --yes-all is set)
-    if args.yes_all {
-        println!("\n{}", "=".repeat(70));
-        println!("  AUTO-CONFIRMED (--yes-all)");
-        println!("{}", "=".repeat(70));
+    if config.yes_all {
+        println!("\n{}", "=".repeat(70).blue().bold());
+        println!("{}", "  AUTO-CONFIRMED (--yes-all)".green().bold());
+        println!("{}", "=".repeat(70).blue().bold());
     } else {
-        println!("\n{}", "=".repeat(70));
-        print!("Do you want to proceed with execution? [y/N]: ");
+        println!("\n{}", "=".repeat(70).blue().bold());
+        print!("{}", "Do you want to proceed with execution? [y/N]: ".yellow().bold());
         use std::io::{self, Write};
         io::stdout().flush()?;
         
@@ -212,9 +287,9 @@ async fn main() -> Result<()> {
     println!("{}", "  EXECUTION STARTED".green().bold());
     println!("{}", "=".repeat(70).green().bold());
     
-    // Run zone transfer if we have domains (unless skipped)
-    if !domain_names.is_empty() && !args.testssl_only {
-        match zone_transfer::run_zone_transfers(&domain_names, &args.output_dir, args.verbose).await {
+    // Run zone transfer if selected and we have domains
+    if config.run_zone_transfer && !domain_names.is_empty() {
+        match zone_transfer::run_zone_transfers(&domain_names, &config.output_dir, config.verbose).await {
             Ok(discovered) => {
                 if !discovered.is_empty() {
                     println!("Adding {} discovered hosts from zone transfer to scan targets...", discovered.len());
@@ -235,31 +310,17 @@ async fn main() -> Result<()> {
         }
     }
     
-    // If --zone-transfer-only, exit here
-    if args.zone_transfer_only {
-        return Ok(());
-    }
-    
-    // Run email verification if we have domains (unless skipped)
-    if !domain_names.is_empty() && !args.testssl_only {
-        if let Err(e) = email_verification::run_email_verification(&domain_names, &args.output_dir, args.verbose).await {
+    // Run email verification if selected and we have domains
+    if config.run_email_verification && !domain_names.is_empty() {
+        if let Err(e) = email_verification::run_email_verification(&domain_names, &config.output_dir, config.verbose).await {
             eprintln!("Email verification error: {}", e);
         }
     }
     
-    // If --email-verification-only, exit here
-    if args.email_verification_only {
-        return Ok(());
-    }
-    
-    // Run actual fuzzing if wordlist provided and not skipped
+    // Run actual fuzzing if selected, wordlist provided
     let mut fuzzed_subdomains = Vec::new();
-    if let Some(wordlist) = &args.wordlist {
-        if args.skip_fuzzing {
-            println!("\n{}", "=".repeat(70));
-            println!("  SUBDOMAIN FUZZING - SKIPPED (--skip-fuzzing)");
-            println!("{}", "=".repeat(70));
-        } else {
+    if config.run_fuzzing {
+        if let Some(wordlist) = &config.wordlist {
             println!("\n{}", "=".repeat(70).blue().bold());
             println!("{}", "  SUBDOMAIN FUZZING".blue().bold());
             println!("{}", "=".repeat(70).blue().bold());
@@ -276,9 +337,7 @@ async fn main() -> Result<()> {
             });
             
             // Run fuzzing with cancellation support
-            // Note: fuzzer::fuzz_subdomains handles the cancellation token internally
-            // and returns partial results if cancelled.
-            match fuzzer::fuzz_subdomains(&targets, wordlist, &args.output_dir, args.verbose, cancel_token.clone()).await {
+            match fuzzer::fuzz_subdomains(&targets, wordlist, &config.output_dir, config.verbose, cancel_token.clone()).await {
                 Ok(found) => {
                     fuzzed_subdomains = found;
                     if !fuzzed_subdomains.is_empty() {
@@ -303,18 +362,23 @@ async fn main() -> Result<()> {
     
     
     // Pass scan targets (filtered IPs only) to scanner for actual execution
-    // If --testssl-only is set, skip Nmap scans
-    let ssl_info = if !args.testssl_only {
-        scanner::run_scans(&scan_targets, &args.output_dir, false, args.verbose, args.all_formats, args.yes_all).await?
+    let ssl_info = if config.run_port_scan {
+        scanner::run_scans(
+            &scan_targets, 
+            &config.output_dir, 
+            false, 
+            config.verbose, 
+            config.all_formats, 
+            config.yes_all,
+            config.custom_nmap_args.as_deref(),
+            config.firewall_evasion
+        ).await?
     } else {
-        println!("\n{}", "=".repeat(70).yellow());
-        println!("{}", "  NMAP SCANS - SKIPPED (--testssl-only)".yellow().bold());
-        println!("{}", "=".repeat(70).yellow());
         Vec::new()
     };
     
-    // Run testssl.sh if enabled (either via --testssl or --testssl-only)
-    if args.testssl || args.testssl_only {
+    // Run testssl.sh if enabled
+    if config.run_testssl {
         // Collect domain targets from original input
         let mut domain_targets: Vec<String> = targets
             .iter()
@@ -324,10 +388,20 @@ async fn main() -> Result<()> {
             })
             .collect();
             
-        // If testssl-only is set, also add all provided IPs to the target list
-        // This bypasses the strict scoping rule used for Nmap scans
-        if args.testssl_only {
-            for t in &targets {
+        // If we are running ONLY testssl (implied by not running port scan? No, explicit flag),
+        // we might want to include IPs.
+        // The original logic was: if testssl_only, include IPs.
+        // Here, if run_testssl is true, we should probably include IPs if strict_scope is false OR if we want to mimic testssl_only behavior.
+        // But wait, testssl.sh works on domains mostly.
+        // Let's stick to: if run_testssl is true, we scan domains.
+        // If the user provided IPs and wants testssl on them, they should be in domain_targets?
+        // The original code added IPs to domain_targets ONLY if testssl_only was true.
+        
+        // Let's check if we are in a "testssl only" mode effectively
+        let is_testssl_only_mode = config.run_testssl && !config.run_port_scan && !config.run_fuzzing && !config.run_zone_transfer && !config.run_email_verification;
+
+        if is_testssl_only_mode {
+             for t in &targets {
                 if let target::Target::IP(ip) = t {
                     domain_targets.push(ip.to_string());
                 }
@@ -340,7 +414,7 @@ async fn main() -> Result<()> {
         }
         
         // ssl_info contains (ip, port) pairs for discovered SSL services
-        omniscan::ssl_scanner::run_testssl_scans(&domain_targets, &ssl_info, &args.output_dir, args.verbose).await?;
+        omniscan::ssl_scanner::run_testssl_scans(&domain_targets, &ssl_info, &config.output_dir, config.verbose).await?;
     }
     
     Ok(())

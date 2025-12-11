@@ -67,6 +67,7 @@ pub async fn resolve_targets(
     targets: &[Target],
     explicit_ips: &[Target],
     verbose: bool,
+    strict_scope: bool,
 ) -> Result<(Vec<Target>, Vec<String>)> {
     use hickory_resolver::TokioAsyncResolver;
     use hickory_resolver::config::{ResolverConfig, ResolverOpts};
@@ -101,29 +102,35 @@ pub async fn resolve_targets(
                     for resolved_ip in resolved_ips {
                         let mut matches_explicit = false;
                         
-                        for explicit in explicit_ips {
-                            match explicit {
-                                Target::IP(ip) => {
-                                    if &resolved_ip == ip {
-                                        matches_explicit = true;
-                                        break;
+                        if strict_scope {
+                            for explicit in explicit_ips {
+                                match explicit {
+                                    Target::IP(ip) => {
+                                        if &resolved_ip == ip {
+                                            matches_explicit = true;
+                                            break;
+                                        }
                                     }
-                                }
-                                Target::Network(network) => {
-                                    if network.contains(resolved_ip) {
-                                        matches_explicit = true;
-                                        break;
+                                    Target::Network(network) => {
+                                        if network.contains(resolved_ip) {
+                                            matches_explicit = true;
+                                            break;
+                                        }
                                     }
+                                    _ => {}
                                 }
-                                _ => {}
                             }
-                        }
 
-                        if matches_explicit {
-                            println!("  -> {} is in explicit target list, will scan", resolved_ip);
-                            scan_targets.push(Target::IP(resolved_ip));
+                            if matches_explicit {
+                                println!("  -> {} is in explicit target list, will scan", resolved_ip);
+                                scan_targets.push(Target::IP(resolved_ip));
+                            } else {
+                                println!("  -> {} is NOT in explicit target list, skipping (strict scope)", resolved_ip);
+                            }
                         } else {
-                            println!("  -> {} is NOT in explicit target list, skipping", resolved_ip);
+                            // Not strict scope - add all resolved IPs
+                            println!("  -> {} added to scan targets", resolved_ip);
+                            scan_targets.push(Target::IP(resolved_ip));
                         }
                     }
                 }
@@ -230,7 +237,7 @@ mod tests {
         let targets = vec![Target::IP("192.168.1.1".parse().unwrap())];
         let explicit = vec![Target::IP("192.168.1.1".parse().unwrap())];
         
-        let (resolved, domains) = resolve_targets(&targets, &explicit, false).await.unwrap();
+        let (resolved, domains) = resolve_targets(&targets, &explicit, false, true).await.unwrap();
         
         // Should contain the explicit IP
         assert_eq!(resolved.len(), 1);
@@ -244,7 +251,7 @@ mod tests {
         let targets = vec![Target::Domain("localhost".to_string())];
         let explicit = vec![Target::IP("127.0.0.1".parse().unwrap())];
         
-        let (resolved, domains) = resolve_targets(&targets, &explicit, false).await.unwrap();
+        let (resolved, domains) = resolve_targets(&targets, &explicit, false, true).await.unwrap();
         
         // Should contain explicit IP + resolved IP (so 2 total, duplicates allowed by logic)
         // Wait, logic is: scan_targets starts with explicit_ips.
@@ -263,7 +270,7 @@ mod tests {
         // Explicit IP that definitely doesn't match localhost
         let explicit = vec![Target::IP("1.2.3.4".parse().unwrap())];
         
-        let (resolved, domains) = resolve_targets(&targets, &explicit, false).await.unwrap();
+        let (resolved, domains) = resolve_targets(&targets, &explicit, false, true).await.unwrap();
         
         // Should ONLY contain the explicit IP (1.2.3.4)
         // Resolved localhost (127.0.0.1) should be filtered out
