@@ -49,6 +49,7 @@ pub fn run_interactive_menu() -> Result<ScanConfig> {
         false, // DNS Zone Transfer
         false, // Email Security
         false, // SSL/TLS Scanning
+        false, // crt.sh Enumeration
     ];
     
     let module_names = vec![
@@ -57,6 +58,7 @@ pub fn run_interactive_menu() -> Result<ScanConfig> {
         "DNS Zone Transfer",
         "Email Security (SPF/DMARC/DKIM)",
         "SSL/TLS Scanning (testssl.sh)",
+        "crt.sh Subdomain Enumeration",
     ];
 
     let mut selection_index = 0;
@@ -111,6 +113,7 @@ pub fn run_interactive_menu() -> Result<ScanConfig> {
     config.run_zone_transfer = module_states[2];
     config.run_email_verification = module_states[3];
     config.run_testssl = module_states[4];
+    config.run_crt_sh = module_states[5];
 
     // 2.1 Port Scan Submenu
     if config.run_port_scan {

@@ -8,3 +8,4 @@ pub mod ssl_scanner;
 pub mod assets;
 pub mod config;
 pub mod interactive;
+pub mod crt_sh;
