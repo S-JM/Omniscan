@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE nmaprun>
+<?xml-stylesheet href="file:///C:/Program Files (x86)/Nmap/nmap.xsl" type="text/xsl"?>
+<!-- Nmap 7.93 scan initiated Thu Dec 11 10:28:41 2025 as: nmap -sU -p 123 -oG - -oX ./custom_scan.xml 66.207.196.26 -->
+<nmaprun scanner="nmap" args="nmap -sU -p 123 -oG - -oX ./custom_scan.xml 66.207.196.26" start="1765466921" startstr="Thu Dec 11 10:28:41 2025" version="7.93" xmloutputversion="1.05">
+<scaninfo type="udp" protocol="udp" numservices="1" services="123"/>

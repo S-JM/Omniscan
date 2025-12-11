@@ -823,8 +823,23 @@ pub async fn run_email_verification(
     println!("{}", "-".repeat(70));
     
     for domain in domains {
-        let result = verify_email_dns(domain, verbose).await?;
-        save_email_verification_results(&result, output_dir)?;
+        // Allow skipping individual domains with Ctrl+C
+        let result = tokio::select! {
+            res = verify_email_dns(domain, verbose) => res,
+            _ = tokio::signal::ctrl_c() => {
+                println!("\n{} {}", "Skipping email verification for".yellow(), domain);
+                continue;
+            }
+        };
+
+        match result {
+            Ok(res) => {
+                save_email_verification_results(&res, output_dir)?;
+            },
+            Err(e) => {
+                eprintln!("Email verification failed for {}: {}", domain, e);
+            }
+        }
         println!();
     }
     
