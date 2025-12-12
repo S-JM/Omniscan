@@ -16,6 +16,7 @@ pub struct ScanConfig {
     pub run_fuzzing: bool,
     pub run_zone_transfer: bool,
     pub run_email_verification: bool,
+    pub run_crt_sh: bool,
 
     // Port scan customization
     pub custom_nmap_args: Option<String>,
@@ -40,6 +41,7 @@ impl Default for ScanConfig {
             run_fuzzing: false,
             run_zone_transfer: false,
             run_email_verification: false,
+            run_crt_sh: false,
 
             custom_nmap_args: None,
             firewall_evasion: false,

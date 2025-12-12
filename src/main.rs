@@ -6,6 +6,7 @@ use omniscan::fuzzer;
 use omniscan::utils;
 use omniscan::zone_transfer;
 use omniscan::email_verification;
+use omniscan::crt_sh;
 use omniscan::config::ScanConfig;
 use omniscan::interactive;
 use colored::*;
@@ -65,6 +66,14 @@ struct Args {
     /// Run ONLY email DNS verification on all provided domains (skips Nmap, fuzzing, TestSSL, zone transfer).
     #[arg(long)]
     email_verification_only: bool,
+
+    /// Check crt.sh for subdomains
+    #[arg(long)]
+    crt_sh: bool,
+
+    /// Run ONLY crt.sh subdomain enumeration on all provided domains (skips Nmap, fuzzing, TestSSL, zone transfer, email).
+    #[arg(long)]
+    crt_sh_only: bool,
 }
 
 impl From<Args> for ScanConfig {
@@ -85,6 +94,7 @@ impl From<Args> for ScanConfig {
             run_fuzzing: false,
             run_zone_transfer: false,
             run_email_verification: false,
+            run_crt_sh: false,
 
             custom_nmap_args: None,
             firewall_evasion: false,
@@ -99,6 +109,8 @@ impl From<Args> for ScanConfig {
             config.run_zone_transfer = true;
         } else if args.email_verification_only {
             config.run_email_verification = true;
+        } else if args.crt_sh_only {
+            config.run_crt_sh = true;
         } else {
             // Default behavior (Nmap + Fuzzing + Zone Transfer + Email + TestSSL if requested)
             // Wait, original behavior was:
@@ -118,6 +130,10 @@ impl From<Args> for ScanConfig {
             
             if args.testssl {
                 config.run_testssl = true;
+            }
+
+            if args.crt_sh {
+                config.run_crt_sh = true;
             }
         }
         
@@ -226,6 +242,18 @@ async fn run_scan(config: ScanConfig) -> Result<()> {
         println!("\n{}", "# Email DNS Verification".blue().bold());
         println!("{}", "Skipped (Not selected)".yellow());
     }
+
+    // Show crt.sh preview if applicable
+    if config.run_crt_sh {
+        if !domain_names.is_empty() {
+            println!("\n{}", "# crt.sh Subdomain Enumeration".blue().bold());
+            println!("Will query crt.sh for subdomains of {} domain(s)", domain_names.len());
+            println!("Domains: {:?}", domain_names);
+        }
+    } else {
+        println!("\n{}", "# crt.sh Subdomain Enumeration".blue().bold());
+        println!("{}", "Skipped (Not selected)".yellow());
+    }
     
     // Show scan preview
     if config.run_port_scan {
@@ -314,6 +342,30 @@ async fn run_scan(config: ScanConfig) -> Result<()> {
     if config.run_email_verification && !domain_names.is_empty() {
         if let Err(e) = email_verification::run_email_verification(&domain_names, &config.output_dir, config.verbose).await {
             eprintln!("Email verification error: {}", e);
+        }
+    }
+
+    // Run crt.sh enumeration if selected and we have domains
+    if config.run_crt_sh && !domain_names.is_empty() {
+        println!("\n{}", "=".repeat(70).blue().bold());
+        println!("{}", "  CRT.SH ENUMERATION".blue().bold());
+        println!("{}", "=".repeat(70).blue().bold());
+
+        for domain in &domain_names {
+            match crt_sh::fetch_subdomains(domain).await {
+                Ok(subdomains) => {
+                    if !subdomains.is_empty() {
+                        println!("Found {} subdomains for {}:", subdomains.len(), domain);
+                        for sub in &subdomains {
+                            println!("{}", sub);
+                            scan_targets.push(target::Target::Domain(sub.clone()));
+                        }
+                    } else {
+                        println!("No subdomains found for {} on crt.sh", domain);
+                    }
+                },
+                Err(e) => eprintln!("Error querying crt.sh for {}: {}", domain, e),
+            }
         }
     }
     
