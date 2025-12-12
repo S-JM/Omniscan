@@ -315,6 +315,9 @@ async fn run_scan(config: ScanConfig) -> Result<()> {
     println!("{}", "  EXECUTION STARTED".green().bold());
     println!("{}", "=".repeat(70).green().bold());
     
+    // Collect all discovered targets (domains/IPs) from various modules
+    let mut discovered_targets: Vec<target::Target> = Vec::new();
+
     // Run zone transfer if selected and we have domains
     if config.run_zone_transfer && !domain_names.is_empty() {
         match zone_transfer::run_zone_transfers(&domain_names, &config.output_dir, config.verbose).await {
@@ -324,10 +327,10 @@ async fn run_scan(config: ScanConfig) -> Result<()> {
                     for host in &discovered {
                         // Try to parse as IP first
                         if let Ok(ip) = host.parse::<std::net::IpAddr>() {
-                            scan_targets.push(target::Target::IP(ip));
+                            discovered_targets.push(target::Target::IP(ip));
                         } else {
                             // Otherwise treat as domain
-                            scan_targets.push(target::Target::Domain(host.clone()));
+                            discovered_targets.push(target::Target::Domain(host.clone()));
                         }
                     }
                 }
@@ -358,7 +361,7 @@ async fn run_scan(config: ScanConfig) -> Result<()> {
                         println!("Found {} subdomains for {}:", subdomains.len(), domain);
                         for sub in &subdomains {
                             println!("{}", sub);
-                            scan_targets.push(target::Target::Domain(sub.clone()));
+                            discovered_targets.push(target::Target::Domain(sub.clone()));
                         }
                     } else {
                         println!("No subdomains found for {} on crt.sh", domain);
@@ -398,10 +401,10 @@ async fn run_scan(config: ScanConfig) -> Result<()> {
                             println!("{}", d);
                         }
                         
-                        // Add to scan targets
+                        // Add to discovered targets
                         println!("Adding found subdomains to scan targets...");
                         for sub in &fuzzed_subdomains {
-                            scan_targets.push(target::Target::Domain(sub.clone()));
+                            discovered_targets.push(target::Target::Domain(sub.clone()));
                         }
                     }
                 }
@@ -412,6 +415,51 @@ async fn run_scan(config: ScanConfig) -> Result<()> {
         }
     }
     
+    // Resolve and merge discovered targets into scan_targets
+    // This ensures they are resolved to IPs, checked against strict scope (if enabled), and deduplicated
+    if !discovered_targets.is_empty() {
+        println!("\nResolving and merging {} discovered targets...", discovered_targets.len());
+        
+        // We pass the current scan_targets as explicit_ips to resolve_targets
+        // This is a bit tricky: resolve_targets uses explicit_ips for TWO things:
+        // 1. Initializing the result vector (we don't want this, we want to append)
+        // 2. Checking strict scope (we DO want this)
+        
+        // So we need to be careful.
+        // If strict_scope is true, we want to check against the ORIGINAL explicit_ips.
+        // If strict_scope is false, we just want to resolve and add.
+        
+        // But wait, scan_targets currently contains the resolved IPs from the initial targets.
+        // If strict_scope is on, we should only allow IPs that match the ORIGINAL explicit_ips.
+        // We have `explicit_ips` variable available from earlier in the function?
+        // No, `explicit_ips` was a local variable in the block above.
+        // We need to reconstruct it or pass it down.
+        
+        // Actually, `scan_targets` was initialized with `explicit_ips` from the start of `run_scan`.
+        // Let's look at the start of `run_scan`:
+        // let explicit_ips: Vec<target::Target> = targets...
+        // let (mut scan_targets, domain_names) = target::resolve_targets(&targets, &explicit_ips, ...).await?;
+        
+        // So `explicit_ips` is available here!
+        
+        let (resolved_discovered, _) = target::resolve_targets(
+            &discovered_targets, 
+            &explicit_ips, 
+            config.verbose, 
+            config.strict_scope
+        ).await?;
+        
+        // Now merge resolved_discovered into scan_targets, avoiding duplicates
+        for target in resolved_discovered {
+            let is_present = scan_targets.iter().any(|t| t == &target);
+            if !is_present {
+                if config.verbose {
+                    println!("Adding new discovered target: {:?}", target);
+                }
+                scan_targets.push(target);
+            }
+        }
+    }
     
     // Pass scan targets (filtered IPs only) to scanner for actual execution
     let ssl_info = if config.run_port_scan {

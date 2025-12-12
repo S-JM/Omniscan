@@ -59,7 +59,7 @@ pub fn parse_targets(input: Vec<String>) -> Result<Vec<Target>> {
 /// # async fn example() -> anyhow::Result<()> {
 /// let targets = vec![Target::Domain("example.com".to_string())];
 /// let explicit = vec![Target::Network("93.184.216.0/24".parse().unwrap())];
-/// let (scan_targets, domains) = resolve_targets(&targets, &explicit, false).await?;
+/// let (scan_targets, domains) = resolve_targets(&targets, &explicit, false, true).await?;
 /// # Ok(())
 /// # }
 /// ```
@@ -71,71 +71,174 @@ pub async fn resolve_targets(
 ) -> Result<(Vec<Target>, Vec<String>)> {
     use hickory_resolver::TokioAsyncResolver;
     use hickory_resolver::config::{ResolverConfig, ResolverOpts};
+    use std::collections::HashSet;
 
-    let mut scan_targets: Vec<Target> = explicit_ips.to_vec();
+    let mut scan_targets: Vec<Target> = Vec::new();
     let mut domain_names: Vec<String> = Vec::new();
+    let mut seen_ips: HashSet<IpAddr> = HashSet::new();
+    let mut seen_networks: HashSet<IpNetwork> = HashSet::new();
+
+    // Initialize scan_targets with explicit_ips, deduplicating them
+    for t in explicit_ips {
+        match t {
+            Target::IP(ip) => {
+                if !seen_ips.contains(ip) {
+                    seen_ips.insert(*ip);
+                    scan_targets.push(t.clone());
+                }
+            },
+            Target::Network(net) => {
+                if !seen_networks.contains(net) {
+                    seen_networks.insert(*net);
+                    scan_targets.push(t.clone());
+                }
+            },
+            _ => {} // Ignore domains in explicit_ips
+        }
+    }
+
+    // Helper to check if an IP is already covered by scan_targets
+    // We can use seen_ips for exact matches, but need to check networks
+    let is_ip_covered = |ip: &IpAddr, networks: &HashSet<IpNetwork>| -> bool {
+        networks.iter().any(|net| net.contains(*ip))
+    };
 
     for t in targets {
-        if let Target::Domain(domain) = t {
-            domain_names.push(domain.clone());
+        match t {
+            Target::Domain(domain) => {
+                domain_names.push(domain.clone());
 
-            if verbose {
-                println!("Resolving domain: {}", domain);
-            }
+                if verbose {
+                    println!("Resolving domain: {}", domain);
+                }
 
-            let resolver = TokioAsyncResolver::tokio(
-                ResolverConfig::google(),
-                ResolverOpts::default()
-            );
+                let resolver = TokioAsyncResolver::tokio(
+                    ResolverConfig::google(),
+                    ResolverOpts::default()
+                );
 
-            match resolver.lookup_ip(domain.as_str()).await {
-                Ok(response) => {
-                    let resolved_ips: Vec<IpAddr> = response.iter().collect();
-                    
-                    if verbose {
-                        println!("Domain {} resolves to: {:?}", domain, resolved_ips);
-                    } else {
-                        println!("Domain {} resolves to: {:?}", domain, resolved_ips);
-                    }
-
-                    // Check if any resolved IP matches explicit targets
-                    for resolved_ip in resolved_ips {
-                        let mut matches_explicit = false;
+                match resolver.lookup_ip(domain.as_str()).await {
+                    Ok(response) => {
+                        let resolved_ips: Vec<IpAddr> = response.iter().collect();
                         
-                        if strict_scope {
-                            for explicit in explicit_ips {
-                                match explicit {
-                                    Target::IP(ip) => {
-                                        if &resolved_ip == ip {
-                                            matches_explicit = true;
-                                            break;
-                                        }
-                                    }
-                                    Target::Network(network) => {
-                                        if network.contains(resolved_ip) {
-                                            matches_explicit = true;
-                                            break;
-                                        }
-                                    }
-                                    _ => {}
+                        if verbose {
+                            println!("Domain {} resolves to: {:?}", domain, resolved_ips);
+                        } else {
+                            println!("Domain {} resolves to: {:?}", domain, resolved_ips);
+                        }
+
+                        // Check if any resolved IP matches explicit targets
+                        for resolved_ip in resolved_ips {
+                            // Check for duplicates first
+                            if seen_ips.contains(&resolved_ip) {
+                                if verbose {
+                                    println!("  -> {} is already covered by scan targets, skipping duplicate", resolved_ip);
                                 }
+                                continue;
+                            }
+                            
+                            if is_ip_covered(&resolved_ip, &seen_networks) {
+                                if verbose {
+                                    println!("  -> {} is covered by network target, skipping duplicate", resolved_ip);
+                                }
+                                // Mark as seen so we don't check again
+                                seen_ips.insert(resolved_ip);
+                                continue;
                             }
 
-                            if matches_explicit {
-                                println!("  -> {} is in explicit target list, will scan", resolved_ip);
-                                scan_targets.push(Target::IP(resolved_ip));
+                            let mut matches_explicit = false;
+                            
+                            if strict_scope {
+                                for explicit in explicit_ips {
+                                    match explicit {
+                                        Target::IP(ip) => {
+                                            if &resolved_ip == ip {
+                                                matches_explicit = true;
+                                                break;
+                                            }
+                                        }
+                                        Target::Network(network) => {
+                                            if network.contains(resolved_ip) {
+                                                matches_explicit = true;
+                                                break;
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                }
+
+                                if matches_explicit {
+                                    println!("  -> {} is in explicit target list, will scan", resolved_ip);
+                                    scan_targets.push(Target::IP(resolved_ip));
+                                    seen_ips.insert(resolved_ip);
+                                } else {
+                                    println!("  -> {} is NOT in explicit target list, skipping (strict scope)", resolved_ip);
+                                }
                             } else {
-                                println!("  -> {} is NOT in explicit target list, skipping (strict scope)", resolved_ip);
+                                // Not strict scope - add all resolved IPs
+                                println!("  -> {} added to scan targets", resolved_ip);
+                                scan_targets.push(Target::IP(resolved_ip));
+                                seen_ips.insert(resolved_ip);
                             }
-                        } else {
-                            // Not strict scope - add all resolved IPs
-                            println!("  -> {} added to scan targets", resolved_ip);
-                            scan_targets.push(Target::IP(resolved_ip));
                         }
                     }
+                    Err(e) => {
+                        eprintln!("Failed to resolve domain {}: {}", domain, e);
+                    }
                 }
-                Err(e) => {
-                    eprintln!("Failed to resolve domain {}: {}", domain, e);
+            },
+            Target::IP(ip) => {
+                // Handle direct IPs (e.g. from discovery)
+                if seen_ips.contains(ip) {
+                    if verbose {
+                        println!("  -> {} is already covered by scan targets, skipping duplicate", ip);
+                    }
+                    continue;
+                }
+                
+                if is_ip_covered(ip, &seen_networks) {
+                    if verbose {
+                        println!("  -> {} is covered by network target, skipping duplicate", ip);
+                    }
+                    seen_ips.insert(*ip);
+                    continue;
+                }
+
+                if strict_scope {
+                    let mut matches_explicit = false;
+                    for explicit in explicit_ips {
+                        match explicit {
+                            Target::IP(eip) => {
+                                if ip == eip {
+                                    matches_explicit = true;
+                                    break;
+                                }
+                            }
+                            Target::Network(network) => {
+                                if network.contains(*ip) {
+                                    matches_explicit = true;
+                                    break;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    if matches_explicit {
+                        scan_targets.push(Target::IP(*ip));
+                        seen_ips.insert(*ip);
+                    }
+                } else {
+                    scan_targets.push(Target::IP(*ip));
+                    seen_ips.insert(*ip);
+                }
+            },
+            Target::Network(net) => {
+                // Handle networks
+                if !seen_networks.contains(net) {
+                    if !strict_scope {
+                        scan_targets.push(Target::Network(*net));
+                        seen_networks.insert(*net);
+                    }
                 }
             }
         }
